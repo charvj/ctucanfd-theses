@@ -4,18 +4,20 @@
     xfaculty = F3,
     mainlanguage = english,
     titlelanguage = english,
-    title-english = {Model of CAN FD Communication Controller for QEMU Emulator -- Analysis and Transmission},
-    title-czech = {Model kontroléru CAN FD v emulátoru QEMU -- analýza a vysílání},
+    title-english = {Model of CAN FD Communication Controller for QEMU Emulator -- Analysis, Transmission and Reception},
+    title-czech = {Model kontroléru CAN FD v emulátoru QEMU -- analýza, vysílání a příjem},
+	doctype-english = {Bachelor Thesis},
     department-english = {Department of Control Engineering},
     author = {Jan Charvát},
 	keywords-czech = {CAN bus, CAN FD, QEMU, Linux, CTU CAN FD, SocketCAN},
 	keywords-english = {CAN bus, CAN FD, QEMU, Linux, CTU CAN FD, SocketCAN},
     supervisor = {Ing. Pavel Píša, Ph.D.},
     supervisor-address = {Praha 2\\ Karlovo náměstí 13\\ E-7a},
-    month = 1,
+    month = 5,
     year = 2020,
 }
 \ctuprocess
+\usepackage{tabularx, array, booktabs}
 \begin{declaration}
 Prohlašuji, že jsem předloženou práci vypracoval samostatně, a že jsem uvedl veškerou použitou literaturu.
 
@@ -24,12 +26,39 @@ V Praze, 17. ledna ~\ctufield{year}
 \begin{thanks}
 I would like to thank Ing. Pavel Píša Ph.D for tutoring and time investments towards my Thesis.
 \end{thanks}
+\begin{abstract-english}
+ This thesis begins with a theoretical part, where is an analysis of CAN 2.0 and differences with newer standard CAN FD. It continues with QEMU CAN subsystem discovering. As a practical part is an implementation of CAN FD communication bus and emulation of CAN FD capable chip as an extension of already implemented CAN 2.0 capable chip SJA1000.
+\end{abstract-english}
 
+\begin{abstract-czech}
+ Tato práce začíná teoretickou částí, kde je analýza CAN 2.0 a rozdíly s nevějším standardem CAN FD. Ta pokračuje s objevováním CAN subsystémů v QEMU. Jako praktická část je implementace CAN FD komunikační sběrnice a emulace čipu uzpůsobeného pro CAN FD jako rozšíření již implementovaného CAN 2.0 čipu SJA100.
+\end{abstract-czech}
 
 \begin{document}
+
 \maketitle
+\chapter*{Nomenclature}
+
+\noindent
+\begin{tabularx}{\linewidth}
+  { l >{\raggedright\arraybackslash}X }
+\bfseries Term & \bfseries Meaning \\\Midrule
+CAN  & The angle of attack \\
+ECU  & The real numbers \\
+CAN & Controller Area Network \\
+ECU & Electronic control unit \\
+CANH & CAN-Hight line \\
+CANL & CAN-Low line \\
+SOF & Start of Frame \\
+RTR & Remote request \\
+IDE & Identifier Extension bit \\
+DLC & Data Length Code \\
+CRC & Cyclic redundancy check \\
+ACK & Acknowledgement \\
+\end{tabularx}
+
 \chapter{Introduction}
- This bachelor project goal is to implement CAN FD communication bus and controller emulation for QEMU full system emulator mode. It builds on previous and ongoing CAN bus related projects developed and or coordinated by CTU FEE. The support of the classic SJA1000 CAN 2.0 controller model for QEMU emulator development started by Jin Yang in RTEMS GSoC 2013 slot mentored by Pavel Pisa from CTU and reached QEMU mainline in 2018. \cite{qemu-mainline} CTU CAN FD controller \cite{ctu-canfd-core} initiated by Ondrej Ille at CTU FEE is selected as the device model used by a guest system to access the CAN FD bus variant. Linux kernel driver for this controller is available as the result of Martin Jerabek's theses. \cite{ctu-canfd} \\
+ This bachelor thesis goal is to implement CAN FD communication bus and controller emulation for QEMU full system emulator mode. It builds on previous and ongoing CAN bus related projects developed and or coordinated by CTU FEE. The support of the classic SJA1000 CAN 2.0 controller model for QEMU emulator development started by Jin Yang in RTEMS GSoC 2013 slot mentored by Pavel Pisa from CTU and reached QEMU mainline in 2018. \cite{qemu-mainline} CTU CAN FD controller \cite{ctu-canfd-core} initiated by Ondrej Ille at CTU FEE is selected as the device model used by a guest system to access the CAN FD bus variant. Linux kernel driver for this controller is available as the result of Martin Jerabek's theses. \cite{ctu-canfd} \\
  The CAN controller core emulation needs to be connected to some system bus to be visible by emulated CPU and the guest system. The model of commercially available Kvaser PCI addon card is used for the SJA1000 emulation. The PCI Express card integration of CTU CAN FD is available as the project. \cite{ctu-project} \\
  SocketCan is used to interface QEMU emulated CAN bus to the CAN bus of the host system when QEMU is run on the Linux system. The QEMU side of the interface has to be extended to support CAN FD protocol.
  The most significant implementation part of this project is to emulate CTU CAN FD IP Core register map \cite{progdum} with QEMU and get communication through this emulated hardware parts on a real CAN hardware bus and see this communication on the other side by monitoring tools. \\
@@ -38,14 +67,21 @@ I would like to thank Ing. Pavel Píša Ph.D for tutoring and time investments t
  project, which delivers utility for a train where CAN communication is used.
 
 \chapter{CAN}
- Automotive industry often uses CAN (Controller Area Network).  For instance, almost every car uses CAN bus. However, the application spectrum is broad. CAN standardised Bosch company in 1986. Hence make industry needs and CAN development significant progress. This project aim to the last most significant innovation CAN FD.
+ Automotive industry often uses CAN.  For instance, almost every car uses CAN bus. One of the reasons is the need not to carry hundreds of kilograms of wire in the car. CAN enable the connection between several ECUs via one bus\cite{ECUs} instead of many analogue signal lines. Next advantage is that all nodes receive each message and decide if they want to use it or not. However, the application spectrum is broad. CAN standardised Bosch company in 1986. Hence make industry needs and CAN development significant progress. This bachelor thesis aim to the last most significant innovation CAN FD.
 
  \section{CAN 2.0}
-  ISO 11898-1:2003 describes CAN 2.0. In the picture is a visible frame bit after bit. There is a quite significant overhead for 8 bytes data. A frame is not always fixed length because of the bit stuffing. This algorithm adds a different bit after five times repeated bit of same value. These redundant bytes relate to synchronisation algorithm because CAN bus does not have fixed timer authority.
+  ISO 11898-1:2003 describes CAN 2.0. In the picture is a visible frame bit after bit. If it is to be sent 8 bytes data, it is visible a quite significant overhead. 
   \begin{figure}[H]
   \includegraphics[width=1\textwidth]{CAN-Bus-frame_in_base_format_without_stuffbits}
   \caption{CAN frame detail \cite{can_frame}}
   \end{figure}
+  The frame starts with SOF, which is always dominant zero. It serves to notify other CAN nodes at the beginning of the arbitration on the sending of a new frame. Then comes identifier, CAN 2.0 brings two length variants for ID, CAN 2.0a corresponds with a sample image and has an 11-bit identifier. CAN 2.0b standard extends identifier to 29-bit. RTR in dominant zero marks standard frame, in the recessive state it changes into a Remote frame, which requests for data from a CAN node with the corresponding ID assigned to the identifier place. IDE distinguished between standard and extended ID format. DLC holds data bytes count that is number between 0 to 8 bytes per message, then come the data. CRC is for data integrity check. ACK first bit is space for confirmation that at least one CAN node accept the message and the second bit for information that at least one CAN node has not accepted the message correctly. If the second condition is accomplished, the whole frame is resent automatically.
+  \subsection{Physical layer}
+   CAN physical layer consist of twisted pair cabling CANH and CANL. Logic value is counted as a result of CANH - CANL and is called Vd\cite{can_Vd}. Exact limiting values generally differ, but when both wires have similar voltage - Vd is close to zero, it is logic 1, and both wires are in recessive state. Dominant state means that in CANL decreased voltage and in CANH increased voltage, Vd gets over a specific limit into logic 0.
+  \subsection{Transmission priority}
+   CAN node priority depend on its ID, which must be unique across the bus. In the case, when more CAN nodes want to transmit data, arbitration wins the CAN node with the lowest ID. It means that can bus transmission is priority-based, and the highest priority is a CAN node with ID full of zeros. The reason comes from the physical layer, the transmission of the identifier is bitwise, and logical zero on the bus means a dominant state. Therefore, if the current's CAN node identifier contains 1, it wants to change the transmission to a recessive state. However, the dominant state representing a logical zero remains on the bus, the current CAN node realises that somewhere across the bus is also transmitting a CAN node with a higher priority, so this CAN node stops transmitting and switch to receive mode only and waits until next arbitration.
+  \subsection{Bit stuffing}
+   The final frame, which is sent through the bus, is not always fixed length because of the bit stuffing. This algorithm adds a different bit after five times repeated bit of same value. These redundant bytes relate to synchronisation algorithm because CAN bus does not have fixed timer authority. These bits could be added between SOF and the end of the  CRC and are not counted by CRC\cite{can_crc}.
 
  \section{CAN FD}
   CAN FD extends the original CAN with the flexible data rate, it means that data can have a higher bit rate than the rest of the frame. In CAN FD also increases maximum data length from 8 bytes to 64 bytes. All mentioned above describes ISO 11898-1:2015.
@@ -218,7 +254,10 @@ I would like to thank Ing. Pavel Píša Ph.D for tutoring and time investments t
 \bibitem{qemu-canbusexplain} https://www.linuxdays.cz/2017/video/Pavel\_Pisa-CAN\_canopen.pdf
 \bibitem{qemu-style} https://github.com/portante/qemu/blob/master/CODING\_STYLE
 \bibitem{linux-style} https://www.kernel.org/doc/html/v4.10/process/coding-style.html
+\bibitem{ECUs} https://www.csselectronics.com/screen/page/simple-intro-to-can-bus/language/en
 \bibitem{can_frame} https://upload.wikimedia.org/wikipedia/commons/5/5e/CAN-Bus-frame/\_in\_base\_format\_without\_stuffbits.svg
+\bibitem{can_Vd} https://www.youtube.com/watch?v=YrJn2AyWVBc
+\bibitem{can_crc} https://elearning.vector.com/mod/page/view.php?id=370
 \bibitem{canfd} https://wiki.automotivelinux.org/\_media/agl-distro/agl2017-socketcan-print.pdf by Oliver Hartkopp - page 49
 \bibitem{canfd_dlc} https://wiki.automotivelinux.org/\_media/agl-distro/agl2017-socketcan-print.pdf by Oliver Hartkopp - page 50
 \bibitem{mc} https://midnight-commander.org/

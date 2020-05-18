@@ -84,7 +84,7 @@ ACK & Acknowledgement \\
    The final frame, which is sent through the bus, is not always fixed length because of the bit stuffing. This algorithm adds a different bit after five times repeated bit of same value. These redundant bytes relate to synchronisation algorithm because CAN bus does not have fixed timer authority. These bits could be added between SOF and the end of the  CRC and are not counted by CRC\cite{can_crc}.
 
  \section{CAN FD}
-  CAN FD extends the original CAN with the flexible data rate, it means that data could have a higher bit rate than the rest of the frame. It is necessary to keep a slower bit rate for the identifier due to the arbitration principle of selecting the highest priority CAN node\cite{priority_can}. Bit rate speed in the automotive industry is about 500 Kbit/s for the arbitration phase and 2 Mbit/s or more for the data phase. In CAN FD also increases maximum data length from 8 bytes to 64 bytes. All mentioned above describes ISO 11898-1:2015.
+  CAN FD extends the original CAN with the flexible data rate, it means that data could have a higher bit rate than the rest of the frame. It is necessary to keep a slower bit rate for the identifier due to the arbitration principle of selecting the highest priority CAN node\cite{priority_can}. Bit rate speed in the automotive industry is about 500 Kbit/s for the arbitration phase and 2 Mbit/s or more for the data phase\cite{canfd_calculator}. In CAN FD also increases maximum data length from 8 bytes to 64 bytes. All mentioned above describes ISO 11898-1:2015.
   \begin{figure}[H]
   \includegraphics[width=1\textwidth]{agl2017-socketcan-can_fd}
   \caption{CAN and CAN FD difference \cite{canfd}}
@@ -102,19 +102,27 @@ ACK & Acknowledgement \\
     \end{figure}
  
 \chapter{QEMU emulator}
- QEMU is a universal virtualisation tool because of several modes for working. The original purpose was to launch processes compiled for another architecture without the need to change current architecture (ARM, MIPS, Linux). However, it is used today more often for full system virtualisation including peripherals virtualisation. Support to CAN bus and controllers emulation has already been accepted into mainline. Nevertheless, CAN bus standard evolves, and a new extended variant of the protocol has been introduced in 2012. It is called CAN FD to highlight use of higher bit rate for the data portion of the frame.
+ QEMU is a universal virtualisation tool because of several modes for working. The original purpose was to launch processes compiled for another architecture without the need to change current architecture (ARM, MIPS, Linux). However, it is used today more often for full system virtualisation including peripherals virtualisation. Support to the CAN bus and controllers emulation has already been accepted into mainline. Nevertheless, CAN bus standard evolves, and a new extended variant of the protocol was introduced in 2012. It is called CAN FD to highlight the use of higher bit rate for the data portion of the frame.
 
- \section{Full system emulation}
+ \section{Automated testing}
+ Linux is already able to handle CAN FD communication, even create virtual CAN bus and set up communication there. A problem occurs with a new CAN interface driver development or implementation of a driver for another operating system. Most project maintainers want to be able to test automatically new changes without all the hardware. It is one of the reasons why started the integration of virtualisation of the CAN bus into QEMU\cite{qemu_development}.
+
+ \section{QEMU Object Model}
+  The newest QEMU device model consists only of devices and properties\cite{qemu_qom}. Properties are the external interface to an object. That means it is different from previous Qdev separation for devices and busses. New device creation is initialised with properties set to default values and has no parent. Each device has a unique name, derived from the parent name.
 
  \section{QEMU architecture}
   Image bellow well describes emulation inside QEMU, and quite good explanation is in CAN support to QEMU emulator documentation. \cite[page 2-4]{qemu-mainline}
+  Linux mainlined Socket CAN API was selected as a connection between host - real CAN hardware and guest system running QEMU with virtualised CAN devices. Each virtual CAN device is seen as a PCI device by the guest system.
+  Two or more emulated controllers could be connected and create virtual CAN bus, and this communication will be visible only in QEMU. One or several interfaces could be connected to the host system via SocketCan and will be observable in the host system by monitoring tools. It is necessary to connect only one controller to the host system. Otherwise, an infinite loop occurs.
   \begin{figure}[H]
   \includegraphics[width=1\textwidth]{qemu-can-bus}
   \caption{QEMU system emulator \cite{qemu-canbusexplain}}
   \end{figure}
-  \section{Coding style}
  
- \section{QEMU subsystem}
+ \section{QEMU CAN subsystem}
+  To be able to access CAN bus in Linux, a physical card is required. Then a driver must be implemented, which understands the data sent over the bus. 
+  The emulated controller SJA1000 is I/O mapped to a single region of emulated Kvaser PCI CAN card. Reading and writing to this region is directly map to SJA1000 chip read or write operations, which supports only byte size access.
+  QEMU also should be able to freeze, save the whole state into prepared VmDescription structures and migrate to another computer, even to another architecture.
 
  \section{Coding style}
   QEMU coding style \cite{qemu-style} is similar to the recommended Linux kernel style \cite{linux-style}. In QEMU repository is the script which checks the written code and shows all problems. The most common mistakes are tabs instead of 4 spaces, spaces or tabs on an empty line, wrong using of parenthesis.
@@ -248,22 +256,26 @@ ACK & Acknowledgement \\
 \begin{thebibliography}{1}
 \bibitem{qemu-mainline} http://rtime.felk.cvut.cz/publications/public/rtlws2015-qemu-can.pdf
 \bibitem{ctu-canfd-core} https://gitlab.fel.cvut.cz/canbus/ctucanfd\_ip\_core
+\bibitem{canfd_calculator} CSS Electronics, CAN FD EXPLAINED - A SIMPLE INTRO: Efficiency and Avarage Bit Rates, https://docs.google.com/spreadsheets/d/\\16XIceuoG\_YBlgyFKXxjYQk2016ln3NeEC68yoMFvwkA/edit\#gid=0, accessed: 2020-05-17.
 \bibitem{ctu-canfd} https://dspace.cvut.cz/bitstream/handle/10467/80366/F3-DP-2019-Jerabek-Martin-Jerabek-thesis-2019-canfd.pdf
 \bibitem{ctu-project} https://gitlab.fel.cvut.cz/canbus/pcie-ctu\_can\_fd
 \bibitem{progdum} http://canbus.pages.fel.cvut.cz/ctucanfd\_ip\_core/Progdokum.pdf
-\bibitem{ECUs} https://www.csselectronics.com/screen/page/simple-intro-to-can-bus/language/en
+\bibitem{ECUs} CSS Electronics, CAN BUS EXPLAINED - A SIMPLE INTRO (2020), https://www.csselectronics.com/screen/page/simple-intro-to-can-bus/language/en, accessed: 2020-05-16.
 \bibitem{can_frame} https://upload.wikimedia.org/wikipedia/commons/5/5e/CAN-Bus-frame/\_in\_base\_format\_without\_stuffbits.svg
-\bibitem{can_Vd} https://www.youtube.com/watch?v=YrJn2AyWVBc
-\bibitem{can_crc} https://elearning.vector.com/mod/page/view.php?id=370
-\bibitem{priority_can} https://www.csselectronics.com/screen/page/can-fd-flexible-data-rate-intro
+\bibitem{can_Vd} Texas Instruments, Automotive Controller Area Network (CAN) Overview and Training, https://www.youtube.com/watch?v=YrJn2AyWVBc - time 4:40, accessed: 2020-05-16.
+\bibitem{can_crc} Vector E-Learning, Introduction to CAN (EN), https://elearning.vector.com/mod/page/view.php?id=370, accessed: 2020-05-16.
+\bibitem{priority_can} CSS Electronics, CAN FD EXPLAINED - A SIMPLE INTRO (2020), https://www.csselectronics.com/screen/page/can-fd-flexible-data-rate-intro, accessed: 2020-05-17.
+\bibitem{canfd} Oliver Hartkopp, The CAN Subsystem of the Linux Kernel, https://wiki.automotivelinux.org/\_media/agl-distro/agl2017-socketcan-print.pdf by Oliver Hartkopp - page 49, accessed: 2020-04-01.
+
+\bibitem{canfd_dlc} Oliver Hartkopp, The CAN Subsystem of the Linux Kernel, https://wiki.automotivelinux.org/\_media/agl-distro/agl2017-socketcan-print.pdf by Oliver Hartkopp - page 50, accessed: 2020-04-01.
+\bibitem{qemu_development} RTEMS, QEMU with CAN Emulation, https://devel.rtems.org/wiki/Developer/Simulators/QEMU/CANEmulation, accessed: 2020-05-18.
+\bibitem{qemu_qom} QEMU, Features/QOM, https://wiki.qemu.org/Features/QOM, accessed: 2020-05-18.
 \bibitem{qemu} https://help.ubuntu.com/lts/serverguide/qemu.html
 \bibitem{vmware} https://www.vmware.com/products/workstation-player/workstation-player-evaluation.html
 \bibitem{ubuntu} https://ubuntu.com/download/desktop
 \bibitem{qemu-canbusexplain} https://www.linuxdays.cz/2017/video/Pavel\_Pisa-CAN\_canopen.pdf
 \bibitem{qemu-style} https://github.com/portante/qemu/blob/master/CODING\_STYLE
 \bibitem{linux-style} https://www.kernel.org/doc/html/v4.10/process/coding-style.html
-\bibitem{canfd} https://wiki.automotivelinux.org/\_media/agl-distro/agl2017-socketcan-print.pdf by Oliver Hartkopp - page 49
-\bibitem{canfd_dlc} https://wiki.automotivelinux.org/\_media/agl-distro/agl2017-socketcan-print.pdf by Oliver Hartkopp - page 50
 \bibitem{mc} https://midnight-commander.org/
 \bibitem{rdwrmem} http://cmp.felk.cvut.cz/~pisa/linux/rdwrmem.c
 \bibitem{can-utils} https://github.com/linux-can/can-utils/

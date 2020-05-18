@@ -80,23 +80,26 @@ ACK & Acknowledgement \\
    CAN physical layer consist of twisted pair cabling CANH and CANL. Logic value is counted as a result of CANH - CANL and is called Vd\cite{can_Vd}. Exact limiting values generally differ, but when both wires have similar voltage - Vd is close to zero, it is logic 1, and both wires are in recessive state. Dominant state means that in CANL decreased voltage and in CANH increased voltage, Vd gets over a specific limit into logic 0.
   \subsection{Transmission priority}
    CAN node priority depend on its ID, which must be unique across the bus. In the case, when more CAN nodes want to transmit data, arbitration wins the CAN node with the lowest ID. It means that can bus transmission is priority-based, and the highest priority is a CAN node with ID full of zeros. The reason comes from the physical layer, the transmission of the identifier is bitwise, and logical zero on the bus means a dominant state. Therefore, if the current's CAN node identifier contains 1, it wants to change the transmission to a recessive state. However, the dominant state representing a logical zero remains on the bus, the current CAN node realises that somewhere across the bus is also transmitting a CAN node with a higher priority, so this CAN node stops transmitting and switch to receive mode only and waits until next arbitration.
-  \subsection{Bit stuffing}
+  \subsection{Bit stuffing and CRC}
    The final frame, which is sent through the bus, is not always fixed length because of the bit stuffing. This algorithm adds a different bit after five times repeated bit of same value. These redundant bytes relate to synchronisation algorithm because CAN bus does not have fixed timer authority. These bits could be added between SOF and the end of the  CRC and are not counted by CRC\cite{can_crc}.
 
  \section{CAN FD}
-  CAN FD extends the original CAN with the flexible data rate, it means that data can have a higher bit rate than the rest of the frame. In CAN FD also increases maximum data length from 8 bytes to 64 bytes. All mentioned above describes ISO 11898-1:2015.
+  CAN FD extends the original CAN with the flexible data rate, it means that data could have a higher bit rate than the rest of the frame. It is necessary to keep a slower bit rate for the identifier due to the arbitration principle of selecting the highest priority CAN node\cite{priority_can}. Bit rate speed in the automotive industry is about 500 Kbit/s for the arbitration phase and 2 Mbit/s or more for the data phase. In CAN FD also increases maximum data length from 8 bytes to 64 bytes. All mentioned above describes ISO 11898-1:2015.
   \begin{figure}[H]
   \includegraphics[width=1\textwidth]{agl2017-socketcan-can_fd}
   \caption{CAN and CAN FD difference \cite{canfd}}
+  \label{fig:cancanfddifference}
   \end{figure}
-  There is no direct compatibility between CAN and CAN FD due to flags as bit rate speed. Classic CAN would not recognize them and reject an error frame. Bit rate speed is 500 kbit/s for the arbitration phase and 2 Mbit/s or more for the data phase.
- 
-  \subsection{Data length code mapping}
-   \begin{figure}[H]
-   \includegraphics[width=1\textwidth]{agl2017-socketcan-can_fd_dlc}
-   \caption{CAN FD frame DLC table \cite{canfd_dlc}}
-   \end{figure}
-   One of the most significant difference is a DLC flag which holds an individually coded length of the data. Data of arbitrary length up to 64 Bytes integrate into one of the possible intervals. First 8 Bytes correspond with standard CAN frames and continue with 12, 16, 20, 24, 32, 48 or 64 Bytes length.
+  \subsection{Compatibility}
+   There is no direct compatibility between CAN and CAN FD due to changes in the control field, see Figure ~\ref{fig:cancanfddifference}. Inconsistency appears in a reserved bit, which is for CAN 2.0 always dominant 0, but now transforms into FDF flag indicating CAN FD frame. Classic CAN 2.0 controller would not recognise CAN FD frame and reject an error frame. Three new bits have been added into the control field. Reserved bit has been added for a possibility of future extension with a new protocol, BRS in recessive 1 indicates a faster bit rate shift of data phase and ESI informs about error passive - logic one or error active transmitter state.
+   \subsubsection{Bit stuffing and CRC}
+    Condition for bit stuffing has been changed. Stuff bits could be added between SOF and newly at the end of the data field with the same principle as CAN 2.0. CRC now counts with these stuffed bits. Stuff bits are also added in CRC but have modified principle. CRC has been improved because several bits have been added and newly has not always the same length. In the checksum is stuff bit count to support CRC with data integrity.
+   \subsubsection{Data length code mapping}
+    One of the most significant difference is a DLC field, which holds an individually coded length of the data. Data of arbitrary length up to 64 bytes integrate into one of the possible intervals. First 8 bytes correspond with standard CAN frame and continue with 12, 16, 20, 24, 32, 48 or 64 bytes length. This non-linear ordering is due to historical reasons that only 4 bits are available.
+    \begin{figure}[H]
+    \includegraphics[width=1\textwidth]{agl2017-socketcan-can_fd_dlc}
+    \caption{CAN FD frame DLC table \cite{canfd_dlc}}
+    \end{figure}
  
 \chapter{QEMU emulator}
  QEMU is a universal virtualisation tool because of several modes for working. The original purpose was to launch processes compiled for another architecture without the need to change current architecture (ARM, MIPS, Linux). However, it is used today more often for full system virtualisation including peripherals virtualisation. Support to CAN bus and controllers emulation has already been accepted into mainline. Nevertheless, CAN bus standard evolves, and a new extended variant of the protocol has been introduced in 2012. It is called CAN FD to highlight use of higher bit rate for the data portion of the frame.
@@ -248,16 +251,17 @@ ACK & Acknowledgement \\
 \bibitem{ctu-canfd} https://dspace.cvut.cz/bitstream/handle/10467/80366/F3-DP-2019-Jerabek-Martin-Jerabek-thesis-2019-canfd.pdf
 \bibitem{ctu-project} https://gitlab.fel.cvut.cz/canbus/pcie-ctu\_can\_fd
 \bibitem{progdum} http://canbus.pages.fel.cvut.cz/ctucanfd\_ip\_core/Progdokum.pdf
+\bibitem{ECUs} https://www.csselectronics.com/screen/page/simple-intro-to-can-bus/language/en
+\bibitem{can_frame} https://upload.wikimedia.org/wikipedia/commons/5/5e/CAN-Bus-frame/\_in\_base\_format\_without\_stuffbits.svg
+\bibitem{can_Vd} https://www.youtube.com/watch?v=YrJn2AyWVBc
+\bibitem{can_crc} https://elearning.vector.com/mod/page/view.php?id=370
+\bibitem{priority_can} https://www.csselectronics.com/screen/page/can-fd-flexible-data-rate-intro
 \bibitem{qemu} https://help.ubuntu.com/lts/serverguide/qemu.html
 \bibitem{vmware} https://www.vmware.com/products/workstation-player/workstation-player-evaluation.html
 \bibitem{ubuntu} https://ubuntu.com/download/desktop
 \bibitem{qemu-canbusexplain} https://www.linuxdays.cz/2017/video/Pavel\_Pisa-CAN\_canopen.pdf
 \bibitem{qemu-style} https://github.com/portante/qemu/blob/master/CODING\_STYLE
 \bibitem{linux-style} https://www.kernel.org/doc/html/v4.10/process/coding-style.html
-\bibitem{ECUs} https://www.csselectronics.com/screen/page/simple-intro-to-can-bus/language/en
-\bibitem{can_frame} https://upload.wikimedia.org/wikipedia/commons/5/5e/CAN-Bus-frame/\_in\_base\_format\_without\_stuffbits.svg
-\bibitem{can_Vd} https://www.youtube.com/watch?v=YrJn2AyWVBc
-\bibitem{can_crc} https://elearning.vector.com/mod/page/view.php?id=370
 \bibitem{canfd} https://wiki.automotivelinux.org/\_media/agl-distro/agl2017-socketcan-print.pdf by Oliver Hartkopp - page 49
 \bibitem{canfd_dlc} https://wiki.automotivelinux.org/\_media/agl-distro/agl2017-socketcan-print.pdf by Oliver Hartkopp - page 50
 \bibitem{mc} https://midnight-commander.org/

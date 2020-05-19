@@ -42,11 +42,12 @@ I would like to thank Ing. Pavel Píša Ph.D for tutoring and time investments t
 \noindent
 \begin{tabularx}{\linewidth}
   { l >{\raggedright\arraybackslash}X }
-\bfseries Term & \bfseries Meaning \\\Midrule
-CAN  & The angle of attack \\
-ECU  & The real numbers \\
+\bfseries Acronym  & \bfseries Meaning \\\Midrule
+CTU & Czech Technical University \\
 CAN & Controller Area Network \\
+FD & Flexible Data Rate \\
 ECU & Electronic control unit \\
+PCI & Peripheral Component Interconnect \\
 CANH & CAN-Hight line \\
 CANL & CAN-Low line \\
 SOF & Start of Frame \\
@@ -55,6 +56,16 @@ IDE & Identifier Extension bit \\
 DLC & Data Length Code \\
 CRC & Cyclic redundancy check \\
 ACK & Acknowledgement \\
+BRS & Bit Rate Speed \\
+FDF & Flexible Data Rate Frame \\
+ESI & Error Status Indicator \\
+Tx buffer & Stores the data for transmission \\
+Rx buffer & Stores the received data \\
+TXCE & "set\_empty" command \\
+TXCR & "set\_ready" command \\
+TXCA & "set\_abort" command \\
+RXFRC & RX buffer frame count \\
+RWCNT & Count of words in CAN frame without FRAME\_FORMAT WORD \\
 \end{tabularx}
 
 \chapter{Introduction}
@@ -91,6 +102,7 @@ ACK & Acknowledgement \\
   \label{fig:cancanfddifference}
   \end{figure}
   \subsection{Compatibility}
+  \label{section:combability}
    There is no direct compatibility between CAN and CAN FD due to changes in the control field, see Figure ~\ref{fig:cancanfddifference}. Inconsistency appears in a reserved bit, which is for CAN 2.0 always dominant 0, but now transforms into FDF flag indicating CAN FD frame. Classic CAN 2.0 controller would not recognise CAN FD frame and reject an error frame. Three new bits have been added into the control field. Reserved bit has been added for a possibility of future extension with a new protocol, BRS in recessive 1 indicates a faster bit rate shift of data phase and ESI informs about error passive - logic one or error active transmitter state.
    \subsubsection{Bit stuffing and CRC}
     Condition for bit stuffing has been changed. Stuff bits could be added between SOF and newly at the end of the data field with the same principle as CAN 2.0. CRC now counts with these stuffed bits. Stuff bits are also added in CRC but have modified principle. CRC has been improved because several bits have been added and newly has not always the same length. In the checksum is stuff bit count to support CRC with data integrity.
@@ -128,25 +140,22 @@ ACK & Acknowledgement \\
   QEMU coding style \cite{qemu-style} is similar to the recommended Linux kernel style \cite{linux-style}. In QEMU repository is the script which checks the written code and shows all problems. The most common mistakes are tabs instead of 4 spaces, spaces or tabs on an empty line, wrong using of parenthesis.
  
 \chapter{Implementation}
- 
-\section{Integration}
-
+ As the next part of this bachelor thesis is the implementation of CAN FD capable chip, which will support QEMU CAN subsystem. Fundamental abilities have been implemented, such as transmission and reception. 
+ \section{Integration}
+  It is necessary to extend QEMU side SocketCan interfacing because it accepts only CAN 2.0 messages. SocketCan has been adopted from the Linux kernel. Therefore, it is possible to be inspired there to expand the support of CAN FD. When the bus enables frames of CAN FD standard, it necessary two thigs to happen. Firstly must be SJA1000 chip slightly modified to be CAN FD tolerant and do not generate error frames. As the next part of CAN FD integration, CTU CAN FD PCI card based on Kvaser PCI CAN card emulation implemented by Jin Yang and Pavel Pisa has to add. Last implementation goal is an emulation of CTU CAN FD IP CORE as a controller mapped into CTU CAN FD PCI card.
  \subsection{SocketCan support for CAN FD}
-  Initial host SocketCan support has been added for CAN FD. SocketCan subsystem allows sending and receiving from the CAN controller. CAN FD frames handling requires to send structure with differences in memory size to SocketCan file handler. \\
-  Struct qemu\_can\_frame has been extended to hold a longer data field and byte to store flags (BRS, etc.) has been defined. The frame is represented by the structure which contains ID with the unique 11 or extended 29 bits message identifier. A data buffer is increased from 8 bytes of CAN 2.0 to 64 bytes message of CAN FD.
+  Initial host SocketCan support has been added for CAN FD. SocketCan subsystem allows sending and receiving from the CAN 2.0 controller. CAN FD frames handling requires to send structure with differences in memory size to SocketCan file handler. Struct qemu\_can\_frame has been extended to hold a more extended data field. On top of that property called flags has been added into message structure. Property called flags is uint8\_t and holds added bits by the new standard such as BRS, ESI and FDF, see~\ref{section:combability}. Property DLC remains same, but in CAN frame are stored accurate data bytes count instead of DLC code, because it simplifies the kernel's back-checking for record lengths.
 
  \subsection{CTU CAN FD core support}
-  Initial CTU CAN FD core support has been started as a copy of SJA1000. Right at this moment is only SJA1000 chip controller supported. Therefore starts the creation of CTU controller supporting Can FD. \\
-  When CTU CAN is integrated into a PCI Express board, then two BARs (Base Address Regions) are expected by the driver. The first keep value to identify the CAN core and provides a number of integrated core instances in the other region. The second region maps registers of the core instances one after another. The registers to control PCI Express MSI (Message Signaling Interrupts) and other FPGA chip-specific control functions are mapped at some offset to the first region as well. \\ 
-  Add CTU CAN FD core register definitions by Ing. Ondrej Ille. It is a significant amount of memory mapping structures, precisely unions, which defines the layout of bits in real hardware. It distinguishes between several types of bits in hardware registers, read-only, write-only or read/write bits. Everything is in product documentation, and it is necessary to follow it for correct emulation behaviour.
+  Initial CTU CAN FD core support has been started as a copy of SJA1000. Right at this moment is only SJA1000 chip controller supported. Therefore starts the creation of CTU controller supporting Can FD.
+  When CTU CAN is integrated into a PCI Express board, then two BARs (Base Address Regions) are expected by the driver. The first keep value to identify the CAN core and provides a number of integrated core instances in the other region. The second region maps registers of the core instances one after another. The registers to control PCI Express MSI (Message Signaling Interrupts) and other FPGA chip-specific control functions are mapped at some offset to the first region as well. At the beginning of the work, it is focused on the critical registers for transmission and reception. Except control registers must be implemented correct behaviour of access for four TX buffer and cyclic FIFO RX buffer. Then are implement less important read/write registers, for sample traffic counters or controller state diagnostics.
  
  \subsection{Registers emulation}
-  Initial implementation of TX buffers. Support of cyclic transmission buffers is necessary for correct message sending. Buffer stores whole frame inside and through interrupt requests for transmission. \\
-  Add can\_dlc2len and can\_len2delc for CAN FD. These functions help with the conversion of DLC to standard LEN and the other way around. DLC uses an individual coding style precisely for this use case explain in CAN FD part.
-  CAN FD and standard frames transmission. Last part of the implementation is to handle interrupts for transmission, Tx buffers state behaviour and implement less important read/write registers. \\
-  The last step is to code clean up and more read-only registers.
+  CTU CAN FD core register definitions by Ing. Ondrej Ille has been used. It is a significant amount of memory mapping structures, precisely unions, which defines the layout of bits in registers in real hardware. It distinguishes between several types of bits in hardware registers, read-only, write-only or read/write bits. Everything is in product documentation, and it is necessary to follow it for correct emulation behaviour. The documentation describes the functional description of CTU CAN FD, programmers model, and parameters of CTU CAN FD. To correct chip emulation must be each bit correctly handled. To access CTU CAN FD device data is possible only through individual registers, it means memory access aligned to words. To be able to read or write, it is necessary to call read or write function with the correct address of the required register as a parameter.
+  Control registers have several functionalities. Write only commands to change inner state, status information about internal traffic counters, errors report and so on or reading of received data.
  
   \subsubsection{Data structures}
+  The internal state of CTU CAN FD controller must be saved somehow. CTU CAN FD core register definitions
  
  \subsection{Interrupts}
  
@@ -157,28 +166,41 @@ ACK & Acknowledgement \\
  \subsection{SJA1000 CAN FD tolerant}
 
  \section{Transmission}
+  TX buffers are used for transmission by CTU CAN FD. They are filled by software, which knows the mapping of TX buffers and stores word after word whole frame. When the whole frame is stored into arbitrary Tx buffer, Tx command TXCR is set. During the processing of TXCR command, it means writing to exact register, controller set buffer into the READY state and immediately sends the frame and change buffer state into buffer OK state. There is no implementation of delay yet. It follows that the transmission cannot be aborted. During this procedure, all Tx buffers are iterated, and Tx buffer in the READY state, which corresponds with the flag of the related buffer is sent.
 
  \subsection{TX buffers}
+  Initial implementation of TX buffers is 0x50 bytes uint\_8t array, computed to be just enough for the maximum size of CAN FD frame. Four Tx buffers are in CTU CAN FD prepared for the transmission. Support of transmission buffers is necessary for correct message sending. Buffer with a stored whole frame inside is transmitted to the bus. Then informs through interrupt requests that transmission took place and that at least one buffer is again in OK state.
 
   \subsubsection{Buffer states}
+  The initial state for all four buffers is the EMPTY state. It indicates that a buffer is free to be used. Same meaning has the OK state, which is set after successful transmission. When the data are ready to be sent, it is the READY state. The ABORT state is not implemented due to no transmission delay, the same for the FAILED state. The FAILED state occurs when several unsuccessful attempts are made.
  
  \subsection{Commands}
+  Several Tx commands are defined. TXCE is able to reset buffer state to initial state. This command could change the FAILED state buffer back to functionality, also affects the OK state and the ABORTED state. TXCA changes the READY state into the ABORTED state. Theoretically, it is possible, but transmission delay is not implemented, so it is not possible to reach this command functionality. The most important command TXCR sends a frame to the bus. Simultaneously set the OK state, the FAILED state or the EMPTY state to the READY state.
  
  \subsection{Buffer to frame}
+  Before sending any data to the bus, it is necessary to move them from an internal stored buffer - this format is defined the same way as the CTU CAN FD core register definitions - to a generally understandable SocketCan frame format. First is an initialisation of QEMU CAN frame structure, data are loaded from the internal buffer by mapping unions which enables to copy the correct bits. At the end of the process, it is possible to directly memcopy the data phase. Every frame stored in Tx buffer is stored there according to the same rules, so header has always 16 bytes and maximum of the data phase could be 64 bytes.
+  memcpy(frame->data, buff + 0x10, 0x40);
  
-  \subsubsection{dlc to length}
- 
+  \subsubsection{DLC to length}
+   Real bytes count is encoded by CAN FD standard into DLC. It is necessary to take care of this non-linear mapping because in the internal buffer is DLC stored by CAN FD standard, but in the frame, which would be sent to the bus is required to hold in DLC real bytes count, because it simplifies the kernel's back-checking for record lengths. Non-linear mapping solution could be found in can\_emu.h as dlc2len function. A little problem is with identifier because it is in the frame as one number, but in defined internal buffer layout, it is divided to the base and extended identifier. The solution is simple, in case of using the only base identifier, the base identifier is assigned to CAN ID. In the opposite case, the extended identifier is assigned first and then use logical OR to add the base identifier shifted by 18 to the left. 
+   
  \section{Reception}
+  Reception is implemented through single FIFO organised Rx buffer. All incoming messages from the bus are stored one after each other. Reading from Rx buffer is going through RX\_DATA register. CTU CAN FD is able to recognise the first and the last word of the frame in the Rx buffer. When the whole frame is read by software, can continue next frame reading immediately.
 
  \subsection{RX buffer}
+  Rx buffer is uint\_8t array with an arbitrary length. After each reception is RXFRC updated. Several messages can be stored during the usual system running, therefore occurs a need for orientation during words reading by SW. This is the reason why the CAN frame reminder was created. After check that Rx buffer is not empty, CAN frame reminder appears as an essential element. If CAN reminder is zero, we read the first word of the new frame. By frame alignment definition is possible to mapped correct structure on it and read RWCNT from which is length of the frame calculated.
  
   \subsubsection{FIFO implementation}
- 
+   There are several possibilities of how a FIFO  could be implemented. For data reading per bytes, is very often used a tail pointer. Head pointer is also essential but is used only for storing the whole frame. Instead of the head pointer was decided to store accurate bytes count in the Rx buffer, from which is the head pointer easy to calculate. Accurate bytes count occurs in several conditions through CTU CAN FD.
  \subsection{Commands}
  
  \subsection{Frame to buffer}
  
-  \subsubsection{Length to dlc}
+  \subsubsection{Length to DLC}
+   Before the incoming frame is possible to store into Rx buffer, it is necessary to move them from a generally understandable SocketCan frame format to an internal stored buffer - this format is defined the same way as the CTU CAN FD core register definitions. It is pretty similar to DLC to a length, but this time with one change. There is an urgency to count bytes in the frame correctly because it is used later for copying from a temporary buffer into the Rx buffer. 
+  
+ \section{Hardware Reset}
+  A hardware reset is called in two cases, always after CTU CAN FD power-up or could be called through writing logic 1 to control register MODE flag RST. After power-up, the reset is more likely used to set up correct reset values. A more complicated situation occurs during a reset in the middle of work. In addition to setting the reset values, the work in progress must be cleaned up. Reset traffic counters, status control registers and interrupts. Each Tx buffer should return in the empty state. It is also necessary to flush Rx buffer. It contains several steps, reset tail position pointer, buffer bytes count and for a case of reset during frame reception also frame reminder.
  
 \chapter{Testing}
  Necessary commands to prepare the testing environment and check the functionality of written code if data go through, messages identifications correspond.

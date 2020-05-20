@@ -27,11 +27,11 @@ V Praze, 17. ledna ~\ctufield{year}
 I would like to thank Ing. Pavel Píša Ph.D for tutoring and time investments towards my Thesis.
 \end{thanks}
 \begin{abstract-english}
- This thesis begins with a theoretical part, where is an analysis of CAN 2.0 and differences with newer standard CAN FD. It continues with QEMU CAN subsystem discovering. As a practical part is an implementation of CAN FD communication bus and emulation of CAN FD capable chip as an extension of already implemented CAN 2.0 capable chip SJA1000.
+ This thesis begins with a theoretical part, which features an analysis of CAN 2.0 and the differences with the newer standard CAN FD. It continues with QEMU CAN subsystem description. As the main goal to contribute back to QEMU mainline is an implementation of a CAN FD communication bus and model of a CAN FD capable controller (open-source CTU CAN FD in a particular case) as an extension of an already implemented CAN 2.0 capable chip SJA1000 emulation.
 \end{abstract-english}
 
 \begin{abstract-czech}
- Tato práce začíná teoretickou částí, kde je analýza CAN 2.0 a rozdíly s nevějším standardem CAN FD. Ta pokračuje s objevováním CAN subsystémů v QEMU. Jako praktická část je implementace CAN FD komunikační sběrnice a emulace čipu uzpůsobeného pro CAN FD jako rozšíření již implementovaného CAN 2.0 čipu SJA100.
+ Tato práce začíná teoretickou částí, která obsahuje analýzu standardu CAN 2.0 a jeho rozdíly s nejnovějším standardem CAN FD. Teoretická část pokračuje s popisem CAN subsystémů v QEMU. Hlavní cíl práce je přispět do vývoje QEMU implementací CAN FD komunikační sběrnice a emulace čipu uzpůsobeného pro CAN FD jako rozšíření již implementovaného CAN 2.0 čipu SJA100.
 \end{abstract-czech}
 
 \begin{document}
@@ -44,11 +44,13 @@ I would like to thank Ing. Pavel Píša Ph.D for tutoring and time investments t
   { l >{\raggedright\arraybackslash}X }
 \bfseries Acronym  & \bfseries Meaning \\\Midrule
 CTU & Czech Technical University \\
+FEE & Faculty of Electrical Engineering \\
 CAN & Controller Area Network \\
+ID & Identifier \\
 FD & Flexible Data Rate \\
 ECU & Electronic control unit \\
 PCI & Peripheral Component Interconnect \\
-CANH & CAN-Hight line \\
+CANH & CAN-Height line \\
 CANL & CAN-Low line \\
 SOF & Start of Frame \\
 RTR & Remote request \\
@@ -61,41 +63,43 @@ FDF & Flexible Data Rate Frame \\
 ESI & Error Status Indicator \\
 Tx buffer & Stores the data for transmission \\
 Rx buffer & Stores the received data \\
+TMP buffer & Temporary buffer \\
 TXCE & "set\_empty" command \\
 TXCR & "set\_ready" command \\
 TXCA & "set\_abort" command \\
 RXFRC & RX buffer frame count \\
 RWCNT & Count of words in CAN frame without FRAME\_FORMAT WORD \\
+RRB & Release Rx buffer \\
+RAM & Random Access Memory \\
 \end{tabularx}
 
 \chapter{Introduction}
- This bachelor thesis goal is to implement CAN FD communication bus and controller emulation for QEMU full system emulator mode. It builds on previous and ongoing CAN bus related projects developed and or coordinated by CTU FEE. The support of the classic SJA1000 CAN 2.0 controller model for QEMU emulator development started by Jin Yang in RTEMS GSoC 2013 slot. This slot mentored by Pavel Pisa from CTU reached the QEMU mainline in 2018. \cite{qemu-mainline} CTU CAN FD controller \cite{ctu-canfd-core} initiated by Ondrej Ille at CTU FEE is selected as the device model used by a guest system to access the CAN FD bus variant. Linux kernel driver for this controller is available as the result of Martin Jerabek's theses. \cite{ctu-canfd} \\
- The CAN controller core emulation needs to be connected to some system bus to be visible by emulated CPU and the guest system. The model of commercially available Kvaser PCI addon card is used for the SJA1000 emulation. The PCI Express card integration of CTU CAN FD \cite{ctu-project} has been selected as a goal for this thesis. \\
- SocketCan is used to interface QEMU emulated CAN bus to the CAN bus of the host system when QEMU is run on the Linux system. The QEMU side of the interface has to be extended to support CAN FD protocol.
- The most significant implementation part of this project is to emulate CTU CAN FD IP Core register map \cite{progdum} with QEMU and get communication through this emulated hardware parts on a real CAN hardware bus and see this communication on the other side by monitoring tools. \\
- This project is open-source the same as the whole QEMU. \\
- My focus to CAN bus is a result of participation in one external company
- project, which delivers utility for a train where CAN communication is used.
+ The goal of this bachelor thesis is to implement a CAN FD communication bus and controller emulation for QEMU full system emulator mode. It builds on previous and ongoing CAN bus related projects developed and coordinated by the CTU FEE. The support of the classic SJA1000 CAN 2.0 controller model for QEMU emulator development started by Jin Yang in RTEMS GSoC 2013 slot. This slot mentored by Pavel Pisa from the CTU reached the QEMU mainline in 2018. \cite{qemu-mainline} CTU CAN FD controller \cite{ctu-canfd-core} initiated by Ondrej Ille at the CTU FEE is selected as the device model used by a guest system to access the CAN FD bus variant. The Linux kernel driver for this controller is available as the result of Martin Jerabek's theses. \cite{ctu-canfd} \\
+ The CAN controller core emulation needs to be connected to some type of a system bus in order to be visible through the emulated CPU and the guest system. A model of the commercially available Kvaser PCI addon card is used for the SJA1000 emulation. The PCI Express card integration of CTU CAN FD \cite{ctu-project} has been selected as a goal for this thesis. \\
+ SocketCan is used to interface QEMU emulated CAN bus to the CAN bus of the host system when QEMU is run on the Linux system. The QEMU side of the interface has to be extended to support a CAN FD protocol.
+The most significant implementation part of this project is to emulate CTU CAN FD IP core register map \cite{progdum} with QEMU, to get the communication through these emulated hardware parts on a real CAN hardware bus and to see this communication on the other side by monitoring tools. \\
+This project is open-source, corresponding to the whole QEMU. \\
+My focus on the CAN bus stems from my participation in one external company project, which delivers utility for a train where CAN communication is used.
 
 \chapter{CAN}
- Automotive industry often uses CAN.  For instance, almost every car uses CAN bus. One of the reasons is the need not to carry hundreds of kilograms of wire in the car. CAN enable the connection between several ECUs via one bus\cite{ECUs} instead of many analogue signal lines. Next advantage is that all nodes receive each message and decide if they want to use it or not. However, the application spectrum is broad. CAN standardised Bosch company in 1986. Hence make industry needs and CAN development significant progress. This bachelor thesis aim to the last most significant innovation CAN FD.
+ Automotive industry often uses CAN.  For instance, almost every car uses a CAN bus. One of the reasons is the need to avoid carrying hundreds of kilograms of wire in the car. CAN enables the connection between several ECUs via one bus \cite{ECUs} , instead of many analogue signal lines. Another advantage lies in the fact that all CAN nodes receive each message and decide whether they want to utilise it or not. However, the application spectrum is broad. CAN standardised Bosch company in 1986; hence industry needs and CAN development make a significant progress. This bachelor thesis concentrates on CAN FD, the lastest and most significant innovation in CAN technology.
 
  \section{CAN 2.0}
-  ISO 11898-1:2003 describes CAN 2.0. In the picture is a visible frame bit after bit. If it is to be sent 8 bytes data, it is visible a quite significant overhead. 
+  ISO 11898-1:2003 describes CAN 2.0. The picture below shows the configuration of the individual bits within the frame. It is apparent that in order to send 8 bits of data, the overhead is quite significant. 
   \begin{figure}[H]
   \includegraphics[width=1\textwidth]{CAN-Bus-frame_in_base_format_without_stuffbits}
   \caption{CAN frame detail \cite{can_frame}}
   \end{figure}
-  The frame starts with SOF, which is always dominant zero. It serves to notify other CAN nodes at the beginning of the arbitration on the sending of a new frame. Then comes identifier, CAN 2.0 brings two length variants for ID, CAN 2.0a corresponds with a sample image and has an 11-bit identifier. CAN 2.0b standard extends identifier to 29-bit. RTR in dominant zero marks standard frame, in the recessive state it changes into a Remote frame, which requests for data from a CAN node with the corresponding ID assigned to the identifier place. IDE distinguished between standard and extended ID format. DLC holds data bytes count that is number between 0 to 8 bytes per message, then come the data. CRC is for data integrity check. ACK first bit is space for confirmation that at least one CAN node accept the message and the second bit for information that at least one CAN node has not accepted the message correctly. If the second condition is accomplished, the whole frame is resent automatically.
+  The frame starts with SOF, which is always dominant zero. It serves to notify other CAN nodes at the beginning of the arbitration on the sending of a new frame. Then comes the identifier, CAN 2.0 brings two length variants for ID, CAN 2.0a corresponds to a sample image and has an 11-bit identifier. CAN 2.0b standard extends the identifier to 29-bit. RTR in dominant zero marks the standard frame; in the recessive state, it changes into a Remote frame, which requests data from a CAN node with the corresponding ID assigned to the identifier place. IDE distinguishes between the standard and extended ID format. DLC holds data bytes count that is a number between 0 and 8 bytes per message, then come the data. CRC serves as a data integrity check. ACK first bit is space for confirmation that at least one CAN node has accepted the message and the second bit for the information that at least one CAN node has not accepted the message correctly. If the second condition is achieved, the whole frame is resent automatically.
   \subsection{Physical layer}
-   CAN physical layer consist of twisted pair cabling CANH and CANL. Logic value is counted as a result of CANH - CANL and is called Vd\cite{can_Vd}. Exact limiting values generally differ, but when both wires have similar voltage - Vd is close to zero, it is logic 1, and both wires are in recessive state. Dominant state means that in CANL decreased voltage and in CANH increased voltage, Vd gets over a specific limit into logic 0.
+   CAN physical layer consists of twisted pair cabling CANH and CANL. The logic value is calculated as the result of CANH - CANL and is labelled as Vd \cite{can_Vd}. The exact limiting values generally differ, but when both wires have a similar voltage - Vd is close to zero, it is logic 1, and both wires are in a recessive state. A dominant state means that in CANL, the voltage decreased while in CANH, the voltage increased, Vd gets over a specific limit into logic 0.
   \subsection{Transmission priority}
-   CAN node priority depend on its ID, which must be unique across the bus. In the case, when more CAN nodes want to transmit data, arbitration wins the CAN node with the lowest ID. It means that can bus transmission is priority-based, and the highest priority is a CAN node with ID full of zeros. The reason comes from the physical layer, the transmission of the identifier is bitwise, and logical zero on the bus means a dominant state. Therefore, if the current's CAN node identifier contains 1, it wants to change the transmission to a recessive state. However, the dominant state representing a logical zero remains on the bus, the current CAN node realises that somewhere across the bus is also transmitting a CAN node with a higher priority, so this CAN node stops transmitting and switch to receive mode only and waits until next arbitration.
+   CAN node priority depends on its ID, which must be unique across the bus. In this case, when more CAN nodes want to transmit data, the CAN node with the lowest ID wins the arbitration. It means that CAN bus transmission is priority-based, and the highest priority is a CAN node with its ID full of zeros. The reason comes from the physical layer, the transmission of the identifier is bitwise, and logical zero on the bus means a dominant state. Therefore, if the current's CAN node identifier contains 1, it wants to change the transmission to the recessive state. However, the dominant state representing a logical zero remains on the bus, the current CAN node realises that a CAN node with a higher priority is also transmitting somewhere across the bus, the first CAN node therefore stops transmitting, switches to receive mode only and waits until the next arbitration.
   \subsection{Bit stuffing and CRC}
-   The final frame, which is sent through the bus, is not always fixed length because of the bit stuffing. This algorithm adds a different bit after five times repeated bit of same value. These redundant bits relate to the synchronisation algorithm because CAN bus does not have fixed timer authority. These bits could be added between SOF and the end of the  CRC and are not counted by CRC\cite{can_crc}.
+   The actual frame, as seen on the bus, includes stuff bits in addition to a binary representation of data bytes and other fields. This algorithm inserts additional bits complement value after a sequence of 5 consecutive bits. These redundant bits relate to a synchronisation algorithm because the CAN bus does not have a fixed timer authority. These bits could be added between SOF and the end of the CRC and are dismissed by CRC \cite{can_crc}.
 
  \section{CAN FD}
-  CAN FD extends the original CAN with the flexible data rate, it means that data could have a higher bit rate than the rest of the frame. It is necessary to keep a slower bit rate for the identifier due to the arbitration principle of selecting the highest priority CAN node\cite{priority_can}. Bit rate speed in the automotive industry is about 500 Kbit/s for the arbitration phase and 2 Mbit/s or more for the data phase\cite{canfd_calculator}. In CAN FD also increases maximum data length from 8 bytes to 64 bytes. All mentioned above is described in ISO 11898-1:2015.
+  CAN FD extends the original CAN with the flexible data rate, it means that data could have a higher bit rate than the rest of the frame. It is necessary to keep a slower bit rate for the identifier due to the arbitration principle of selecting the highest priority CAN node \cite{priority_can}. Bit rate speed in the automotive industry is about 500 Kbit/s for the arbitration phase and 2 Mbit/s or more for the data phase. In CAN FD, the maximum data length also increases from 8 bytes to 64 bytes. All the aforementioned describes in ISO 11898-1:2015.
   \begin{figure}[H]
   \includegraphics[width=1\textwidth]{agl2017-socketcan-can_fd}
   \caption{CAN and CAN FD difference \cite{canfd}}
@@ -103,46 +107,47 @@ RWCNT & Count of words in CAN frame without FRAME\_FORMAT WORD \\
   \end{figure}
   \subsection{Compatibility}
   \label{section:combability}
-   There is no direct compatibility between CAN and CAN FD due to changes in the control field, see Figure ~\ref{fig:cancanfddifference}. Inconsistency appears in a reserved bit, which is for CAN 2.0 always dominant 0, but now transforms into FDF flag indicating CAN FD frame. Classic CAN 2.0 controller would not recognise CAN FD specific frames and reject them with transmitting an error frame. Three new bits have been added into the control field. Reserved bit has been added for a possibility of future extension with a new protocol, BRS in recessive 1 indicates a faster bit rate shift of data phase and ESI informs about error passive - logic one or error active transmitter state.
+   There is no direct compatibility between CAN and CAN FD due to changes in the control field, see Figure ~\ref{fig:cancanfddifference}. Inconsistency appears in a reserved bit, which is always dominant 0 for CAN 2.0, but it now transforms into FDF flag indicating a CAN FD frame. Classic CAN 2.0 controller would not recognise a CAN FD specific frames and reject them with transmitting an error frame. Three new bits have been added into the control field. Reserved bit has been added for the possibility of future extension with a new protocol, BRS in recessive 1 indicates a faster bit rate shift of data phase and ESI informs about error passive - logic one or error active transmitter state.
    \subsubsection{Bit stuffing and CRC}
-    Condition for bit stuffing has been changed. Stuff bits could be added between SOF and newly at the end of the data field with the same principle as CAN 2.0. CRC now counts with these stuffed bits. Stuff bits are also added in CRC but have modified principle. CRC has been improved because several bits have been added and newly has not always the same length. In the checksum is stuff bit count to support CRC with data integrity.
+    The condition for bit stuffing has been changed. Stuff bits could be added between SOF and newly at the end of the data field with the same principle as CAN 2.0. CRC now calculates with these stuff bits. Stuff bits are also added in CRC but have modified principle. CRC has been improved because several bits have been added and newly do not always have the same length. In the checksum is stuff bit count to support CRC with data integrity.
    \subsubsection{Data length code mapping}
-    One of the most significant difference is a DLC control field, which holds an individually coded length of the data. Data of arbitrary length up to 64 bytes integrate into one of the possible intervals. First 8 bytes correspond with standard CAN frame and continue with 12, 16, 20, 24, 32, 48 or 64 bytes length. This non-linear ordering is due to historical reasons that only 4 bits are available.
+    One of the most significant differences is a DLC control field, which holds an individually coded length of the data. Data of arbitrary length of up to 64 bytes integrate into one of the possible intervals. First 8 bytes correspond to the standard CAN frame and continue with 12, 16, 20, 24, 32, 48 or 64 bytes length. This non-linear ordering stems from the historical reason that only 4 bits were available.
     \begin{figure}[H]
     \includegraphics[width=1\textwidth]{agl2017-socketcan-can_fd_dlc}
     \caption{CAN FD frame DLC table \cite{canfd_dlc}}
     \end{figure}
  
 \chapter{QEMU emulator}
- QEMU is a universal virtualisation tool because of several modes for working. The original purpose was to launch a program compiled for another architecture as a user-space process without the need to change current architecture (ARM, MIPS, Linux). However, it is used today more often for full system virtualisation including peripherals virtualisation. Support to the CAN bus and controllers emulation has already been accepted into mainline. Nevertheless, CAN bus standard evolves, and a new extended variant of the protocol was introduced in 2012. It is called CAN FD to highlight the use of higher bit rate for the data portion of the frame.
+ QEMU is a universal virtualisation tool as it is able to function in several distinctive modes. The original purpose was to launch a program compiled for another architecture as a user-space process without the need to change the current architecture (ARM, MIPS, Linux). However, it is used more frequently nowadays for a full system virtualisation including peripherals virtualisation. Support of the CAN bus and controllers emulation has already been accepted into the mainline. Nevertheless, the CAN bus standard evolves, and a new extended variant of the protocol was introduced in 2012. It is called CAN FD to highlight the use of higher bit rate for the data portion of the frame.
 
  \section{Automated testing}
- Linux is already able to handle CAN FD communication, even create virtual CAN bus and set up communication there. A problem occurs with a new CAN interface driver development or implementation of a driver for another operating system. Most project maintainers want to be able to test automatically new changes without all the hardware. It is one of the reasons why started the integration of virtualisation of the CAN bus into QEMU\cite{qemu_development}.
+ Linux is already able to handle CAN FD communication, even to create a virtual CAN bus and set up the communication there. A problem occurs with a new CAN interface driver development or implementation of a driver for another operating system. Most project maintainers want to be able to test new changes automatically, without all the hardware. It is one of the reasons why the integration of virtualisation of the CAN bus into QEMU started \cite{qemu_development}.
 
  \section{QEMU Object Model}
-  The newest QEMU device model consists only of devices and properties\cite{qemu_qom}. Properties are the external interface to an object. That means it is different from previous Qdev separation for devices and busses. New device creation is initialised with properties set to default values and has no parent. Each device has a unique name, derived from the parent name.
+  The newest QEMU device model consists only of devices and properties\cite{qemu_qom}. Properties are the external interface to an object. That means it differs from the previous Qdev separation for devices and busses. New device creation is initialised with properties set to default values and has no parent. Each device has a unique name, derived from the parent name.
 
  \section{QEMU architecture}
+  Linux mainlined Socket CAN API was selected as a connection between the host - real CAN hardware, and a guest system running QEMU with virtualised CAN devices. Each virtual CAN device is seen as a PCI device by the guest system. \\
+  Two or more emulated controllers could be connected and create virtual CAN bus, and this communication will be visible only in QEMU. One or more interfaces could be connected to the host system via SocketCan and will be observable in the host system through monitoring tools. However, it is necessary to connect only one controller to the host system. Otherwise, an infinite loop occurs. \\
   Image bellow well describes emulation inside QEMU, and quite good explanation is in CAN support to QEMU emulator documentation. \cite[page 2-4]{qemu-mainline}
-  Linux mainlined Socket CAN API was selected as a connection between host - real CAN hardware and guest system running QEMU with virtualised CAN devices. Each virtual CAN device is seen as a PCI device by the guest system.
-  Two or more emulated controllers could be connected and create virtual CAN bus, and this communication will be visible only in QEMU. One or several interfaces could be connected to the host system via SocketCan and will be observable in the host system by monitoring tools. It is necessary to connect only one controller to the host system. Otherwise, an infinite loop occurs.
   \begin{figure}[H]
   \includegraphics[width=1\textwidth]{qemu-can-bus}
   \caption{QEMU system emulator \cite{qemu-canbusexplain}}
   \end{figure}
  
  \section{QEMU CAN subsystem}
-  To be able to access CAN bus in Linux, a physical card is required. Then a driver must be implemented, which understands the data sent over the bus. 
-  The emulated controller SJA1000 is I/O mapped to a single region of emulated Kvaser PCI CAN card. Reading and writing to this region is directly map to SJA1000 chip read or write operations, which supports only byte size access.
-  QEMU also should be able to freeze, save the whole state into prepared VmDescription structures and migrate to another computer, even to another architecture.
+  To be able to access CAN bus in Linux, a physical card is required. Subsequently, a driver must be implemented, which understands the data sent over the bus. \\
+  The emulated controller SJA1000 is I/O mapped to a single region of the emulated Kvaser PCI CAN card. Reading and writing to this region is directly mapped to the SJA1000 chip read or write operations, which supports only byte size access. \\
+  QEMU also should be able to freeze, save the whole state into the prepared VmStateDescription structures and migrate to another computer, even to another architecture. \\
 
  \section{Coding style}
-  QEMU coding style \cite{qemu-style} is similar to the recommended Linux kernel style \cite{linux-style}. There is available the script which checks the written code and shows all problems in QEMU repository. The most common mistakes are tabs instead of 4 spaces, spaces or tabs on an empty line, incorrect using of parenthesis.
+  QEMU coding style \cite{qemu-style} is similar to the recommended Linux kernel style.  The QEMU repository includes the script which checks the written code and displays all problems. The most common mistakes are tabs instead of 4 spaces, spaces or tabs on an empty line, incorrect use of parenthesis.
+
  
 \chapter{Implementation}
  As the next part of this bachelor thesis is the implementation of CAN FD capable chip, which will support QEMU CAN subsystem. Fundamental abilities have been implemented, such as transmission and reception. 
  \section{Integration}
-  It is necessary to extend QEMU side SocketCan interfacing because it accepts only CAN 2.0 messages. SocketCan has been adopted from the Linux kernel. Therefore, it is possible to be inspired there to expand the support of CAN FD. When the bus enables frames of CAN FD standard, it necessary two thigs to happen. Firstly must be SJA1000 chip slightly modified to be CAN FD tolerant and do not generate error frames. As the next part of CAN FD integration, CTU CAN FD PCI card based on Kvaser PCI CAN card emulation implemented by Jin Yang and Pavel Pisa has to add. Last implementation goal is an emulation of CTU CAN FD IP CORE as a controller mapped into CTU CAN FD PCI card.
+  It is necessary to extend QEMU side SocketCan interfacing because it accepts only CAN 2.0 messages. SocketCan has been adopted from the Linux kernel. Therefore, it is possible to be inspired there to expand the support of CAN FD. When the bus enables frames of CAN FD standard, it necessary two thigs to happen. Firstly must be SJA1000 chip slightly modified to be CAN FD tolerant and do not generate error frames. As the next part of CAN FD integration, CTU CAN FD PCI card based on Kvaser PCI CAN card emulation implemented by Jin Yang and Pavel Pisa has to add. Last implementation goal is an emulation of CTU CAN FD IP core as a controller mapped into CTU CAN FD PCI card.
  \subsection{SocketCan support for CAN FD}
   Initial host SocketCan support has been added for CAN FD. SocketCan subsystem allows sending and receiving from the CAN 2.0 controller. CAN FD frames handling requires to send structure with different memory size to SocketCan file handler. Struct qemu\_can\_frame has been extended to hold a more extended data field. On top of that property called flags has been added into message structure. Property called flags is uint8\_t and holds added bits by the new standard such as BRS, ESI and FDF, see~\ref{section:combability}. Property DLC remains same, but in CAN frame are stored accurate data bytes count instead of DLC code, because it simplifies the kernel's back-checking for record lengths.
 
@@ -155,7 +160,9 @@ RWCNT & Count of words in CAN frame without FRAME\_FORMAT WORD \\
   Control registers have several functionalities. Write only commands to change inner state, status information about internal traffic counters, errors report and so on or reading of received data.
  
   \subsubsection{Data structures}
-  The internal state of CTU CAN FD controller must be saved somehow. CTU CAN FD core register definitions
+  The internal state of CTU CAN FD controller must be saved somehow. CTU CAN FD core register definitions enable to create variables, which are structured the same way as bits of a specific register. It is not necessary to create a variable for each register. Some control registers are write-only, for sample command control registers, which changing inner state, but it is not a necessity to store them. These data structures are defined in ctucan\_core.h and together with Tx and Rx buffers and auxiliary variables form and hold the whole CTU CAN FD core state.
+  Each device in the QEMU should be able to store the whole state into VMStateDescription structures and be able to run from this state after some break again. This state storing is hierarchical based. 
+  CTU CAN FD PCI holds a fundamental structure TypeInfo. Every single device in QEMU device tree must have one. It contains a name, as TYPE\_CAN\_PCI\_DEV, a parent in the hierarchal based tree, for PCI device it is TYPE\_PCI\_DEVICE, pointers to initialisation function and some more additional information. CTU CAN FD core is written generically, that means that it is standalone and it is not unconditionally part of PCI device. CTU CAN PCI has two cores when PCI device initialisation is processed, two instances of CTU CAN FD core are created, and each takes place in its slot.
  
  \subsection{Interrupts}
  
@@ -181,23 +188,28 @@ RWCNT & Count of words in CAN frame without FRAME\_FORMAT WORD \\
   Before sending any data to the bus, it is necessary to move them from an internal stored buffer - this format is defined the same way as the CTU CAN FD core register definitions - to a generally understandable SocketCan frame format. First is an initialisation of QEMU CAN frame structure, data are loaded from the internal buffer by mapping unions which enables to copy the correct bits. At the end of the process, it is possible to directly memcopy the data phase. Every frame stored in Tx buffer is stored there according to the same rules, so header has always 16 bytes and maximum of the data phase could be 64 bytes.
   memcpy(frame->data, buff + 0x10, 0x40);
  
-  \subsubsection{DLC to length}
+  \subsubsection{Ambiguous problems}
    Real bytes count is encoded by CAN FD standard into DLC. It is necessary to take care of this non-linear mapping because in the internal buffer is DLC stored by CAN FD standard, but in the frame, which would be sent to the bus is required to hold in DLC real bytes count, because it simplifies the kernel's back-checking for record lengths. Non-linear mapping solution could be found in can\_emu.h as dlc2len function. A little problem is with identifier because it is in the frame as one number, but in defined internal buffer layout, it is divided to the base and extended identifier. The solution is simple, in case of using the only base identifier, the base identifier is assigned to CAN ID. In the opposite case, the extended identifier is assigned first and then use logical OR to add the base identifier shifted by 18 to the left. 
    
  \section{Reception}
   Reception is implemented through single FIFO organised Rx buffer. All incoming messages from the bus are stored one after each other. Reading from Rx buffer is going through RX\_DATA register. CTU CAN FD is able to recognise the first and the last word of the frame in the Rx buffer. When the whole frame is read by software, can continue next frame reading immediately.
 
  \subsection{RX buffer}
-  Rx buffer is uint\_8t array with an arbitrary length. After each reception is RXFRC updated. Several messages can be stored during the usual system running, therefore occurs a need for orientation during words reading by SW. This is the reason why the CAN frame reminder was created. After check that Rx buffer is not empty, CAN frame reminder appears as an essential element. If CAN reminder is zero, we read the first word of the new frame. By frame alignment definition is possible to mapped correct structure on it and read RWCNT from which is length of the frame calculated.
+  Rx buffer is uint\_8t array with an arbitrary length. After each reception is RXFRC updated. Several messages can be stored during the usual system running, therefore occurs a need for orientation during words reading by SW. This is the reason why the CAN frame reminder was created. After check that Rx buffer is not empty, CAN frame reminder appears as an essential element during RX\_DATA register reading. If CAN remainder is zero, we read the first word of the new frame. By frame alignment definition is possible to map correct structure on it and read RWCNT from which is the length of the frame calculated. Rx buffer overrun occurs when traffic from the buss fill up Rx buffer and reading from it is too slow. At the moment that the new frame cannot be stored, the overrun interrupt is invoked, and the frame is throw away. It is possible to flush the Rx buffer by writing logic 1 to control register COMMAND flag RRB. 
  
   \subsubsection{FIFO implementation}
-   There are several possibilities of how a FIFO  could be implemented. For data reading per bytes, is very often used a tail pointer. Head pointer is also essential but is used only for storing the whole frame. Instead of the head pointer was decided to store accurate bytes count in the Rx buffer, from which is the head pointer easy to calculate. Accurate bytes count occurs in several conditions through CTU CAN FD.
- \subsection{Commands}
+   There are several possibilities of how a FIFO could be implemented. For data reading per bytes, is very often used a tail pointer. Head pointer is also essential but is used only for storing the whole frame. Instead of the head pointer was decided to store accurate bytes count in the Rx buffer, from which is the head pointer easy to calculate. Accurate bytes count is used in several conditions across the CTU CAN FD.
  
  \subsection{Frame to buffer}
+  Before the incoming frame is possible to store into Rx buffer, it is necessary to move them from a generally understandable SocketCan frame format to an internal stored buffer - this format is defined the same way as the CTU CAN FD core register definitions. For this purpose, the TMP buffer is created with the size of one CAN FD frame. This buffer has to be set to zeros by memset.
+  memset(buff, 0, CTUCAN\_MSG\_MAX\_LEN * sizeof(*buff));
+  The data are loaded from the frame to the TMP buffer internal buffer by mapping unions which enables to copy bits to the correct place in the TMP buffer. The data phase could be copy directly by memcpy.
+memcpy(buff + 0x10, frame->data, 0x40);
  
-  \subsubsection{Length to DLC}
-   Before the incoming frame is possible to store into Rx buffer, it is necessary to move them from a generally understandable SocketCan frame format to an internal stored buffer - this format is defined the same way as the CTU CAN FD core register definitions. It is pretty similar to DLC to a length, but this time with one change. There is an urgency to count bytes in the frame correctly because it is used later for copying from a temporary buffer into the Rx buffer. 
+  \subsubsection{Ambiguous problems}
+   It is pretty similar to transmissions problems, but this time with one change. There is an urgency to count bytes in the frame correctly because it is used later for copying from a TMP buffer into the Rx buffer. Luckily the non-data phase has always 16 bytes. The frame holds DLC in the exact bytes count so that we can use this number, but on one condition, the resulting number of bytes must be aligned by words.
+   bytes\_cnt = (bytes\_cnt + 3) \& ~3;
+   CAN ID is stored in the frame as one number. Internally it is necessary to divide it to the base and extended identifier. In the case of the base identifier only, first 11 bit should use logical AND with 0x3FF. When the extended identifier with 29 bits is used, it is divided to the 11 bits identifier base and 18 the bits extended identifier. Firstly must be CAN ID masked by logical AND with 0x3FFFF and stored to the extended ID. After that must be CAN ID shifted to the left by 18 and masked by logical AND with 0x01FFFC0000.
   
  \section{Hardware Reset}
   A hardware reset is called in two cases, always after CTU CAN FD power-up or could be called through writing logic 1 to control register MODE flag RST. After power-up, the reset is more likely used to set up correct reset values. A more complicated situation occurs during a reset in the middle of work. In addition to setting the reset values, the work in progress must be cleaned up. Reset traffic counters, status control registers and interrupts. Each Tx buffer should return in the empty state. It is also necessary to flush Rx buffer. It contains several steps, reset tail position pointer, buffer bytes count and for a case of reset during frame reception also frame reminder.
@@ -223,8 +235,12 @@ RWCNT & Count of words in CAN frame without FRAME\_FORMAT WORD \\
 
  \section{Actual testing environment setup}
   This section describes a setup which has been used. This bachelor project has been developed on the system with Windows 10 where it runs utility for virtual machines VMware  Workstation 15 player in its free version available for non-commercial use only. \cite{vmware} \\
-  On VMware run virtual machine Ubuntu 18.04.3 LTS, \cite{ubuntu} inside Ubuntu take place whole work with QEMU. QEMU also use virtualisation, so during the work, for testing purpose, the next Linux system emulates inside the QEMU and results in virtualisation chain, which is not the best practice for working, but luckily, it is possible. In this case, QEMU uses the same build of the Linux kernel as an external system. It was kernel version 5.3.0-51-generic for Ubuntu 18.04.3 LTS at the time of the writing of the theses. QEMU is possible to run with -nographic parameter, and it uses the current terminal window as its native console. \\
-
+  On VMware run virtual machine Ubuntu 18.04.3 LTS, \cite{ubuntu} inside Ubuntu take place whole work with QEMU. QEMU also use virtualisation, so during the work, for testing purpose, the next Linux system emulates inside the QEMU and results in virtualisation chain, which is not the best practice for working, but luckily, it is possible. In this case, QEMU uses the same build of the Linux kernel as an external system. It was kernel version 5.3.0-51-generic for Ubuntu 18.04.3 LTS at the time of the writing of the theses. QEMU is possible to run with
+  \begin{verbatim}   -nographic\end{verbatim}
+  parameter, and it uses the current terminal window as its native console. \\
+  The console is connected through ttyS0 serial port. To quit QEMU running in the console non-trivial key combination is required, it is Control + A + X. Several times occurs problem after the Ubuntu software update. The kernel version is exactly set, so it must be updated.
+  \begin{verbatim}-kernel   /boot/vmlinuz-5.3.0-46-generic\end{verbatim}
+  Then RAM disk 
  \section{Test SW}
  
  \section{Driver}
@@ -248,33 +264,6 @@ RWCNT & Count of words in CAN frame without FRAME\_FORMAT WORD \\
   In the actual state of implementation does not take buffer selection any place. Buffer selection should be implemented together with transmission delay because all four buffers are every time, when TXCR is set, iterated and Tx buffer in the READY state, which corresponds with the flag of the related buffer are immediately transmitted.
  
  \subsection{Vision}
-
-\chapter{Attachment 1}
- 
- \section{Installation guide for programmers}
-  Check installation of git versioning system by
-  \begin{verbatim}  git --version\end{verbatim}
-  if there is no installation on computer write command
-  \begin{verbatim}  sudo apt install git\end{verbatim}
-  Now pull QEMU mainline from git
- \begin{verbatim}  git clone git://git.qemu.org/qemu.git\end{verbatim}
-  Will continue with proper installation way. \\
-  Until the project is not in mainline, it could be found here.
-  \begin{verbatim}  git remote add gitlab-fel https://gitlab.fel.cvut.cz/canbus/qemu-canbus.git
-   git checkout -b charvj10-canfd gitlab-fel/charvj10-canfd\end{verbatim}
-
-\chapter{Attachment 2}
-
- \section{Useful commands}
-  During the work is a great advantage to know some hidden features which are available on the actual system or program. It could make progress faster and simpler. A division between general Linux advice and specific testing purpose commands help with the problem understanding and shows personal usage what might do work easier.
- \section{Linux}
-  For heavy Linux users are these commands and features natural, but for standard users, or mainly Windows programmers can help. The advice also contains shortcuts for Midnight Commander \cite{mc}. MC during the bachelor project proof itself as a great file explorer to browse and work with the file-system.
-  \begin{verbatim}  F9 + cf\end{verbatim}
-  MC F9 Command Find, go through the whole directory and try to find the written filename or keyword.
-  \begin{verbatim}  lspci-full -v\end{verbatim}
-  Display full information list about devices connected to the PCI bus.
-  \begin{verbatim}  rdwrmem -b 4 -s 0x08010000 -l 100 -m\end{verbatim}
-  Dump certain memory location. \cite{rdwrmem}
  
  
 \renewcommand\bibname{References}
@@ -305,4 +294,30 @@ RWCNT & Count of words in CAN frame without FRAME\_FORMAT WORD \\
 \bibitem{rdwrmem} http://cmp.felk.cvut.cz/~pisa/linux/rdwrmem.c
 \bibitem{can-utils} https://github.com/linux-can/can-utils/
 \end{thebibliography}
+ 
+\appendix
+\chapter{Installation guide for programmers}
+  Check installation of git versioning system by
+  \begin{verbatim}  git --version\end{verbatim}
+  if there is no installation on computer write command
+  \begin{verbatim}  sudo apt install git\end{verbatim}
+  Now pull QEMU mainline from git
+ \begin{verbatim}  git clone git://git.qemu.org/qemu.git\end{verbatim}
+  Will continue with proper installation way. \\
+  Until the project is not in mainline, it could be found here.
+  \begin{verbatim}   git remote add gitlab-fel https://gitlab.fel.cvut.cz/canbus/qemu-canbus.git
+   git fetch --all
+   git checkout -b charvj10-canfd gitlab-fel/charvj10-canfd\end{verbatim}
+
+\chapter{Useful commands}
+  During the work is a great advantage to know some hidden features which are available on the actual system or program. It could make progress faster and simpler. A division between general Linux advice and specific testing purpose commands help with the problem understanding and shows personal usage what might do work easier.
+ \section{Linux}
+  For heavy Linux users are these commands and features natural, but for standard users, or mainly Windows programmers can help. The advice also contains shortcuts for Midnight Commander \cite{mc}. MC during the bachelor project proof itself as a great file explorer to browse and work with the file-system.
+  \begin{verbatim}  F9 + cf\end{verbatim}
+  MC F9 Command Find, go through the whole directory and try to find the written filename or keyword.
+  \begin{verbatim}  lspci-full -v\end{verbatim}
+  Display full information list about devices connected to the PCI bus.
+  \begin{verbatim}  rdwrmem -b 4 -s 0x08010000 -l 100 -m\end{verbatim}
+  Dump certain memory location. \cite{rdwrmem}
+ 
 \end{document}

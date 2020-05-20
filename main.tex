@@ -69,7 +69,7 @@ RWCNT & Count of words in CAN frame without FRAME\_FORMAT WORD \\
 \end{tabularx}
 
 \chapter{Introduction}
- This bachelor thesis goal is to implement CAN FD communication bus and controller emulation for QEMU full system emulator mode. It builds on previous and ongoing CAN bus related projects developed and or coordinated by CTU FEE. The support of the classic SJA1000 CAN 2.0 controller model for QEMU emulator development started by Jin Yang in RTEMS GSoC 2013 slot mentored by Pavel Pisa from CTU and reached QEMU mainline in 2018. \cite{qemu-mainline} CTU CAN FD controller \cite{ctu-canfd-core} initiated by Ondrej Ille at CTU FEE is selected as the device model used by a guest system to access the CAN FD bus variant. Linux kernel driver for this controller is available as the result of Martin Jerabek's theses. \cite{ctu-canfd} \\
+ This bachelor thesis goal is to implement CAN FD communication bus and controller emulation for QEMU full system emulator mode. It builds on previous and ongoing CAN bus related projects developed and or coordinated by CTU FEE. The support of the classic SJA1000 CAN 2.0 controller model for QEMU emulator development started by Jin Yang in RTEMS GSoC 2013 slot. This slot mentored by Pavel Pisa from CTU reached the QEMU mainline in 2018. \cite{qemu-mainline} CTU CAN FD controller \cite{ctu-canfd-core} initiated by Ondrej Ille at CTU FEE is selected as the device model used by a guest system to access the CAN FD bus variant. Linux kernel driver for this controller is available as the result of Martin Jerabek's theses. \cite{ctu-canfd} \\
  The CAN controller core emulation needs to be connected to some system bus to be visible by emulated CPU and the guest system. The model of commercially available Kvaser PCI addon card is used for the SJA1000 emulation. The PCI Express card integration of CTU CAN FD \cite{ctu-project} has been selected as a goal for this thesis. \\
  SocketCan is used to interface QEMU emulated CAN bus to the CAN bus of the host system when QEMU is run on the Linux system. The QEMU side of the interface has to be extended to support CAN FD protocol.
  The most significant implementation part of this project is to emulate CTU CAN FD IP Core register map \cite{progdum} with QEMU and get communication through this emulated hardware parts on a real CAN hardware bus and see this communication on the other side by monitoring tools. \\
@@ -222,8 +222,8 @@ RWCNT & Count of words in CAN frame without FRAME\_FORMAT WORD \\
  Send CAN frame with additional settings and debug output.
 
  \section{Actual testing environment setup}
-  This bachelor project develops on the system with Windows 10 where it runs utility for virtual machines VMware  Workstation 15 player in its free version available for non-commercial use only. \cite{vmware} \\
-  On VMware run virtual machine Ubuntu 18.04.3 LTS, \cite{ubuntu} inside Ubuntu take place whole work with QEMU. QEMU also use virtualisation, so during the work, for testing purpose, the next Linux system emulates inside the QEMU and results in virtualisation chain, which is not the best practice for working, but luckily, it is possible. In this case, QEMU uses the same build of the Linux kernel as an external system. It means Ubuntu 18.04.3 LTS. QEMU is possible to run with -nographic parameter, and it uses the current terminal window as its native console. \\
+  This section describes a setup which has been used. This bachelor project has been developed on the system with Windows 10 where it runs utility for virtual machines VMware  Workstation 15 player in its free version available for non-commercial use only. \cite{vmware} \\
+  On VMware run virtual machine Ubuntu 18.04.3 LTS, \cite{ubuntu} inside Ubuntu take place whole work with QEMU. QEMU also use virtualisation, so during the work, for testing purpose, the next Linux system emulates inside the QEMU and results in virtualisation chain, which is not the best practice for working, but luckily, it is possible. In this case, QEMU uses the same build of the Linux kernel as an external system. It was kernel version 5.3.0-51-generic for Ubuntu 18.04.3 LTS at the time of the writing of the theses. QEMU is possible to run with -nographic parameter, and it uses the current terminal window as its native console. \\
 
  \section{Test SW}
  
@@ -243,6 +243,9 @@ RWCNT & Count of words in CAN frame without FRAME\_FORMAT WORD \\
   Consider messages rate slowdown as on real CAN bus. Some mechanism prevents to some limit lost of messages when a guest application is slow. Convert CAN bus model from plain C to QOM (Controllers are QOM/Qdev already). Add more CAN controllers model emulation (BOSCH/Ti C CAN, Freescale FlexCAN, etc.).
  
  \subsection{Transmission delay}
+ 
+ \subsection{TXT buffer selection}
+  In the actual state of implementation does not take buffer selection any place. Buffer selection should be implemented together with transmission delay because all four buffers are every time, when TXCR is set, iterated and Tx buffer in the READY state, which corresponds with the flag of the related buffer are immediately transmitted.
  
  \subsection{Vision}
 
@@ -283,7 +286,7 @@ RWCNT & Count of words in CAN frame without FRAME\_FORMAT WORD \\
 \bibitem{ctu-project} https://gitlab.fel.cvut.cz/canbus/pcie-ctu\_can\_fd
 \bibitem{progdum} http://canbus.pages.fel.cvut.cz/ctucanfd\_ip\_core/Progdokum.pdf
 \bibitem{ECUs} CSS Electronics, CAN BUS EXPLAINED - A SIMPLE INTRO (2020), https://www.csselectronics.com/screen/page/simple-intro-to-can-bus/language/en, accessed: 2020-05-16.
-\bibitem{can_frame} https://upload.wikimedia.org/wikipedia/commons/5/5e/CAN-Bus-frame/\_in\_base\_format\_without\_stuffbits.svg
+\bibitem{can_frame} https://upload.wikimedia.org/wikipedia/commons/5/5e/CAN-Bus-frame\_in\_base\_format\_without\_stuffbits.svg
 \bibitem{can_Vd} Texas Instruments, Automotive Controller Area Network (CAN) Overview and Training, https://www.youtube.com/watch?v=YrJn2AyWVBc - time 4:40, accessed: 2020-05-16.
 \bibitem{can_crc} Vector E-Learning, Introduction to CAN (EN), https://elearning.vector.com/mod/page/view.php?id=370, accessed: 2020-05-16.
 \bibitem{priority_can} CSS Electronics, CAN FD EXPLAINED - A SIMPLE INTRO (2020), https://www.csselectronics.com/screen/page/can-fd-flexible-data-rate-intro, accessed: 2020-05-17.

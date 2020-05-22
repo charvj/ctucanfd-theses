@@ -86,7 +86,7 @@ RAM & Random Access Memory \\
 \end{tabularx}
 
 \chapter{Introduction}
- The goal of this bachelor thesis is to implement a CAN FD communication bus and controller emulation for QEMU full system emulator mode. It builds on previous and ongoing CAN bus related projects developed and coordinated by the CTU FEE. The support of the classic SJA1000 CAN 2.0 controller model for QEMU emulator development started by Jin Yang in RTEMS GSoC 2013 slot. This slot mentored by Pavel Pisa from the CTU reached the QEMU mainline in 2018. \cite{qemu-mainline} CTU CAN FD controller \cite{ctu-canfd-core} initiated by Ondrej Ille at the CTU FEE is selected as the device model used by a guest system to access the CAN FD bus variant. The Linux kernel driver for this controller is available as the result of Martin Jerabek's thesis. \cite{ctu-canfd} \\
+ The goal of this bachelor thesis is to implement a CAN FD communication bus and controller emulation for QEMU full system emulator mode. It builds on previous and ongoing CAN bus related projects developed and coordinated by the CTU FEE. The support of the classic SJA1000 CAN 2.0 controller model for QEMU emulator development started by Jin Yang in RTEMS GSoC 2013 slot. This slot, mentored by Pavel Pisa from the CTU, reached the QEMU mainline in 2018. \cite{qemu-mainline} CTU CAN FD controller \cite{ctu-canfd-core} initiated by Ondrej Ille at the CTU FEE is selected as the device model used by a guest system to access the CAN FD bus variant. The Linux kernel driver for this controller is available as the result of Martin Jerabek's thesis. \cite{ctu-canfd} \\
  The CAN controller core emulation needs to be connected to some type of a system bus in order to be visible to the emulated CPU and the guest system. A model of the commercially available Kvaser PCI addon card is used for the SJA1000 emulation. The PCI Express card integration of CTU CAN FD \cite{ctu-project} has been selected as a goal for this thesis. \\
  SocketCan is used to interface a QEMU emulated CAN bus to the CAN bus of the host system when QEMU is run on the Linux system. The QEMU side of the interface has to be extended to support a CAN FD protocol.
 The most significant implementation part of this project is to emulate CTU CAN FD IP core register map \cite{progdum} with QEMU, to get the communication through these emulated hardware parts on a real CAN hardware bus, and to see this communication on the other side by monitoring tools. \\
@@ -108,7 +108,7 @@ My focus on the CAN bus stems from my participation in one external company proj
   \subsection{Transmission priority}
    CAN node priority depends on its ID, which must be unique across the bus. In this case, when more CAN nodes want to transmit data, the CAN node with the lowest ID wins the arbitration. It means that CAN bus transmission is priority-based, and the highest priority is assigned to a CAN node with the frame's ID full of zeros. The reason comes from the physical layer, the transmission of the identifier is bitwise, and logic 0 on the bus means a dominant state. Therefore, if the current CAN node identifier is transmitting logic 1, it wants to change the transmission to the recessive state. However, the dominant state representing a logic 0 prevails on the bus, the respective CAN node realises that a CAN node with a higher priority is also transmitting somewhere across the bus, the first CAN node, therefore, stops transmitting, switches to receive mode only and waits until the next arbitration.
   \subsection{Bit stuffing and CRC}
-   The actual frame, as seen on the bus, includes stuff bits in addition to a binary representation of data bytes and other fields. This algorithm inserts additional bits of complement value after a sequence of 5 consecutive bits. These redundant bits relate to a synchronisation algorithm because the CAN bus does not have a fixed clock signal. These bits could be added between SOF and the end of the CRC and are not counted into CRC calculation \cite{can_crc}.
+   The actual frame, as seen on the bus, includes stuff bits in addition to a binary representation of data bytes and other fields. This algorithm inserts additional bits of complement value after a sequence of 5 consecutive bits. These redundant bits relate to a synchronisation algorithm because the CAN bus does not have a fixed clock signal. These bits can be added between SOF and the end of the CRC and are not counted into CRC calculation \cite{can_crc}.
 
  \section{CAN FD}
   CAN FD extends the original CAN with the flexible data rate, it means that data could be transmitted at a higher bit rate than the rest of the frame. It is necessary to keep a slower bit rate for the identifier due to the arbitration principle of selecting the highest priority CAN node \cite{priority_can}. The typical bit rate speed used in the automotive industry is 500 Kbit/s for the arbitration phase and 2 Mbit/s or more for the data phase. In CAN FD, the maximum data length also increases from 8 bytes to 64 bytes. All the aforementioned describes ISO 11898-1:2015.
@@ -121,7 +121,7 @@ My focus on the CAN bus stems from my participation in one external company proj
   \label{section:combability}
    There is no direct compatibility between CAN and CAN FD due to changes in the control field, see Figure ~\ref{fig:cancanfddifference}. Inconsistency appears in a reserved bit, which is always dominant 0 for CAN 2.0, but it now transforms into FDF flag indicating a CAN FD frame. Classic CAN 2.0 controller would not recognise CAN FD specific frames and would reject them while transmitting an error frame. Three new bits have been added into the control field. Reserved bit has been added for the possibility of future extension with a new protocol, BRS in recessive logic 1 indicates a faster bit rate shift of data phase and ESI informs about error passive - logic 1, or error active transmitter state.
    \subsubsection{Bit stuffing and CRC}
-    The condition for bit stuffing has been changed. Stuffing bits could be added between SOF and newly at the end of the data field with the same principle as CAN 2.0. CRC now calculates with these stuff bits. Stuffed bits are also added in CRC, but with modified principle. CRC has been improved because several bits have been added and newly do not always have the same length. The checksum also includes stuff bit count to support CRC with data integrity.
+    The condition for bit stuffing has been changed. Stuffing bits can be added between SOF and newly at the end of the data field with the same principle as CAN 2.0. CRC now calculates with these stuff bits. Stuffed bits are also added in CRC, but with modified principle. CRC has been improved because several bits have been added and newly do not always have the same length. The checksum also includes stuff bit count to support CRC with data integrity.
    \subsubsection{Data length code mapping}
     One of the most significant differences is the DLC control field, which holds an individually coded length of the data. Data of arbitrary length of up to 64 bytes integrate into one of the possible intervals. First 8 bytes correspond to the standard CAN frame and continue with 12, 16, 20, 24, 32, 48 or 64 bytes length. This non-linear ordering stems from the historical reason that only 4 bits were available.
     \begin{figure}[H]
@@ -162,12 +162,13 @@ My focus on the CAN bus stems from my participation in one external company proj
  The following part of this bachelor thesis consists of the implementation of CAN FD capable chip, which will support QEMU CAN subsystem. Essential required mechanisms have been implemented, such as transmission and reception.  
  \section{Integration}
   It is necessary to extend the QEMU side SocketCan interfacing because it accepts only CAN 2.0 messages. CAN FD support for SocketCAN has been accepted in the Linux kernel. Therefore, it is possible to be inspired there to expand the support of the CAN FD in the QEMU. When the bus enables frames of CAN FD standard, two following steps are necessary to happen. First, the SJA1000 chip emulation must be slightly modified to become CAN FD tolerant and not generate error frames. As the next part of CAN FD integration, a CTU CAN FD PCI card based on the Kvaser PCI CAN card emulation implemented by Jin Yang and Pavel Pisa has to be added. Last implementation goal is an emulation of a CTU CAN FD IP core as the controller mapped into the CTU CAN FD PCI card.
+  
  \subsection{SocketCan support for CAN FD}
-  Initial host SocketCan support has been added for CAN FD. SocketCan subsystem, allowing sending and receiving from the CAN 2.0 controller. CAN FD frames handling requires to send structure with a different memory size to the SocketCan socket determined by the file handle. Structure qemu\_can\_frame has been extended to hold to provide space for up to 64 data bytes. Furthermore, a property called flags has been added into the message structure. The flags property is uint8\_t and holds additional bits newly defined in the standard such as BRS, ESI and FDF, see~\ref{section:combability}. DLC property remains identical, but the CAN frame stores actual data bytes count instead of DLC code because it simplifies the kernel's back-checking for record lengths.
+  Initial host SocketCan support has been added for CAN FD. SocketCan subsystem, allows sending and receiving from the CAN 2.0 controller. CAN FD frames handling requires to send structure with a different memory size to the SocketCan socket determined by the file handle. Structure qemu\_can\_frame has been extended to hold to provide space for up to 64 data bytes. Furthermore, a property called flags has been added into the message structure. The flags property is uint8\_t and holds additional bits newly defined in the standard such as BRS, ESI and FDF, see~\ref{section:combability}. DLC property remains identical, but the CAN frame stores actual data bytes count instead of DLC code because it simplifies the kernel's back-checking for record lengths.
 
  \subsection{CTU CAN FD core support}
   Initial CTU CAN FD core support was started as a copy of SJA1000 controller emulation, which was the sole supported controller at the time of the project launch. The creation of CTU controller supporting CAN FD  has already commenced. \\
-  When CTU CAN is integrated into a PCI Express board, then two BARs (Base Address Regions) are expected by the driver. The first one stores value to identify the CAN core and provides a number of integrated core instances in the other region. The first region is read-only and is accessed by ctucan\_pci\_id\_cra\_io\_read function. The second region maps registers of the core instances one after another. As an I/O mapped region, it can be accessed by reading ctucan\_pci\_cores\_io\_read function, which immediately calls core function ctucan\_mem\_read with a correctly aligned memory address as the parameter. Function ctucan\_pci\_cores\_io\_write operates on the same principle as the read function. The registers to control PCI Express MSI (Message Signaling Interrupts) and other FPGA chip-specific control functions are also mapped at a certain offset to the first region. At the beginning of my work, attention is focused on the critical registers for transmission and reception. Apart from the control registers, correct behaviour of access for four TX buffer and cyclic FIFO RX buffer must be also implemented in the first stage. Subsequently, less important read/write registers are implemented, for sample traffic counters or controller state diagnostics.
+  When CTU CAN is integrated into a PCI Express board, then two BARs (Base Address Regions) are expected by the driver. The first one stores value to identify the CAN core and provides a number of integrated core instances in the other region. The first region is read-only and is accessed by ctucan\_pci\_id\_cra\_io\_read function. The second region maps registers of the core instances one after another. As an I/O mapped region, it can be accessed by reading ctucan\_pci\_cores\_io\_read function, which immediately calls core function ctucan\_mem\_read with a correctly aligned memory address as the parameter. Function ctucan\_pci\_cores\_io\_write operates on the same principle as the read function. The registers to control PCI Express MSI (Message Signaling Interrupts) and other FPGA chip-specific control functions are also mapped at a certain offset to the first region. At the beginning of my work, attention is focused on the critical registers for transmission and reception. Apart from the control registers, correct behaviour of access for four TX buffer and cyclic FIFO RX buffer must be also implemented in the first stage. Subsequently, less important read/write registers are implemented, for example traffic counters or controller state diagnostics.
  
  \subsection{Registers emulation}
   CTU CAN FD core register definitions are generated from IPXACT CTU CAN core specification (version 2.1), which is a part of the IP core design architected by Ing. Ondrej Ille. It is a significant amount of memory mapping structures, more specifically unions, which define the layout of bits in registers in real hardware. It distinguishes between several types of bits in hardware registers, read-only, write-only, and read/write bits. Everything is included in product documentation, and it is necessary to follow it precisely for correct emulation behaviour. The documentation describes the functional description of CTU CAN FD, programmers model, and parameters of CTU CAN FD. In order to ensure core emulation which works with Linux kernel driver, each bit has to be handled according to the specification. Accessing CTU CAN FD device data is possible only through the individual registers, meaning memory access is aligned with words. To be able to read or write, it is necessary to call a read or write function with the correct address of the required register as a parameter. \\
@@ -236,7 +237,7 @@ Each device in the QEMU should be able to store the whole state into VMStateDesc
  
  \subsection{Frame to buffer}
   Before it is possible to store the incoming frame into the Rx buffer, it is necessary to convert the frame from a generally understandable SocketCan frame format to an internal stored buffer - this format is defined in the same way as the CTU CAN FD core register definitions. For this purpose, the TMP buffer is created with the size of one CAN FD frame. This buffer must be set to zeros by memset.
-  \begin{verbatim}memset(buff, 0, CTUCAN\_MSG\_MAX\_LEN * sizeof(*buff));\end{verbatim}
+  \begin{verbatim}memset(buff, 0, CTUCAN_MSG_MAX_LEN * sizeof(*buff));\end{verbatim}
   The data are loaded from the frame to the internal TMP buffer by mapping unions which enable to copied bits to the correct place in the TMP buffer. The data phase can be copy directly by memcpy.
   \begin{verbatim}memcpy(buff + 0x10, frame->data, 0x40);\end{verbatim}
  
@@ -253,19 +254,19 @@ Each device in the QEMU should be able to store the whole state into VMStateDesc
 
  \section{Actual testing environment setup}
   This section describes the setup which was used. This bachelor project was developed in a system with Windows 10 where it runs utility for virtual machines VMware Workstation 15 player in its free version available for non-commercial use only \cite{vmware}. \\
-  virtual machine Ubuntu 18.04.3 LTS \cite{ubuntu} runs on VMware. The entire work with QEMU takes place inside the Ubuntu. QEMU also uses virtualisation, so during the work, for testing purposes, the next Linux system emulates inside the QEMU and results in virtualisation chain, which is not the best practice for working, but fortunately, it is possible. In this case, QEMU uses the same build of the Linux kernel as an external system. It was kernel version 5.3.0-51-generic for Ubuntu 18.04.3 LTS at the time of the writing of the thesis. QEMU is possible to run with
+  Virtual machine Ubuntu 18.04.3 LTS \cite{ubuntu} runs on VMware. The entire work with QEMU takes place inside the Ubuntu. QEMU also uses virtualisation, so during the work, for testing purposes, the next Linux system emulates inside the QEMU and results in virtualisation chain, which is not the best practice for working, but fortunately, it is possible. In this case, QEMU uses the same build of the Linux kernel as an external system. It was kernel version 5.3.0-51-generic for Ubuntu 18.04.3 LTS at the time of the writing of the thesis. QEMU can be run with
   \begin{verbatim}   -nographic\end{verbatim}
-   parameter, and it uses the current terminal window as its native console.
+   parameter, and then it uses the current terminal window as its native console.
    \begin{verbatim}   -append "console=ttyS0"\end{verbatim}
-This parameter ensures that the console is connected through ttyS0 serial port. To quit QEMU running in the console, a  non-trivial key combination is required, specifically Control + a  x. A problem occurs several times after the Ubuntu software update. The kernel version is precisely set, so it must be updated.
+This parameter commands Linux kernel to use ttyS0 as the system console output for error and informative messages which are directed to the terminal window from which they can be easily copy-pasted and saved for future analysis. To quit QEMU running in the console, a  non-trivial key combination is required, specifically Control + 'a'  'x'. A problem occurs several times after the Ubuntu software update. The kernel version is precisely set, so it must be updated.
   \begin{verbatim}-kernel   /boot/vmlinuz-5.3.0-46-generic\end{verbatim}
   The RAM disk needs to be generated
   \begin{verbatim}   mkramdisk-mf624\end{verbatim}
-  and then needs to be added as a parameter 
+  and then needs to be added as a Qemu parameter 
   \begin{verbatim}   -initrd ramdisk.cpio\end{verbatim}
   Before starting the QEMU, it is possible to set a shared directory which could be used for data transfer between host and guest systems during QEMU's run. This allows the option to add files or binaries into the emulated system during its run. In this example case, a sharreddir directory (in the same directory as a Qemu launcher qemu-run) is mapped with the use of p9 protocol to simple QEMU virtual file system by the QEMU parameter below.
  \begin{verbatim}-virtfs local,path=shareddir,security_model=none,mount_tag=shareddir\end{verbatim}
- It is not shared memory between the Qemu and the Ubuntu; it is a special type of directory structure connection.` These code snippets bellow are paths to access to directories for communication between inner and outer Linux systems during QEMU emulation. A file from the host system then can be stored to
+ These code snippets bellow are paths to access to directories for communication between inner and outer Linux systems during QEMU emulation. A file from the host system then can be stored to
   \begin{verbatim}   ls ~/QEMU_RUN_DIR/shareddir\end{verbatim}
   and will be visible from the guest system in
  \begin{verbatim}   ls mnt/shareddir/bin/\end{verbatim}
@@ -279,6 +280,11 @@ This parameter ensures that the console is connected through ttyS0 serial port. 
           [-b] bitrate switch
           [-i] use instance 0 or 1 from certain PCI card\end{verbatim}
  PCI must be enabled before this user-space program is launched, but at the same time driver can not be loaded. \\
+ To enable CTU CAN FD PCI device
+\begin{verbatim}   lspci -n -d 1760:ff00\end{verbatim}
+is used to find on which PCI bus and in which "socket" the card is present and then to use for example.
+\begin{verbatim}   echo 1 >/sys/devices/pci0000:00/0000:00:06.0/enable\end{verbatim}
+where bus number and device slot is adjusted according to lspci output.\\
  It is beneficial for debugging to have the user-space program.
  
  \section{Driver}
@@ -297,7 +303,7 @@ This parameter ensures that the console is connected through ttyS0 serial port. 
 
  
 \chapter{Conclusion}
- The goal of this thesis was to analyse the differences between CAN 2.0 and CAN FD standards and to describe QEMU CAN subsystem, and to use this knowledge in the subsequent part and create a functional emulation of a CAN FD communication bus and model of a CAN FD capable controller. Both targets were achieved.
+ The goal of this thesis was to analyse the differences between CAN 2.0 and CAN FD standards and to describe QEMU CAN subsystem, and to use this knowledge in the subsequent part and create a functional emulation of a CAN FD communication bus and model of a CAN FD capable controller. Both targets were achieved.This thesis could be found in git repository \cite{thesis-repo}.
 
  \section{Work already completed}
   This project analyses the basic QEMU concept and how to work with it as a full system emulator. It also demonstrates a proper coding style for QEMU. The next part analyses CAN frames differences between standards to be able to understand which parts changed and how to implement them. It is necessary to know the role of each bit of CAN frame to be able to operate with them. The analysis offers a group of often-used commands which help with the workflow and with the testing.
@@ -320,14 +326,15 @@ This parameter ensures that the console is connected through ttyS0 serial port. 
  
 \renewcommand\bibname{References}
 \begin{thebibliography}{1}
-\bibitem{qemu-mainline} http://rtime.felk.cvut.cz/publications/public/rtlws2015-qemu-can.pdf
-\bibitem{ctu-canfd-core} https://gitlab.fel.cvut.cz/canbus/ctucanfd\_ip\_core
+\bibitem{qemu-mainline} Pavel Pisa, Jin Yang, Michal Sojka, QEMU CAN Controller Emulation with Connection to a Host
+System CAN Bus, http://rtime.felk.cvut.cz/publications/public/rtlws2015-qemu-can.pdf, accessed: 2020-05-20.
+\bibitem{ctu-canfd-core} CTU CAN FD IP Core, https://gitlab.fel.cvut.cz/canbus/ctucanfd\_ip\_core, accessed: 2020-05-10
 \bibitem{canfd_calculator} CSS Electronics, CAN FD EXPLAINED - A SIMPLE INTRO: Efficiency and Avarage Bit Rates, https://docs.google.com/spreadsheets/d/\\16XIceuoG\_YBlgyFKXxjYQk2016ln3NeEC68yoMFvwkA/edit\#gid=0, accessed: 2020-05-17.
-\bibitem{ctu-canfd} https://dspace.cvut.cz/bitstream/handle/10467/80366/F3-DP-2019-Jerabek-Martin-Jerabek-thesis-2019-canfd.pdf
-\bibitem{ctu-project} https://gitlab.fel.cvut.cz/canbus/pcie-ctu\_can\_fd
-\bibitem{progdum} http://canbus.pages.fel.cvut.cz/ctucanfd\_ip\_core/Progdokum.pdf
+\bibitem{ctu-canfd} Martin Jeřábek, Open-source and Open-hardware CAN FD Protocol Support, https://dspace.cvut.cz/bitstream/handle/10467/80366/F3-DP-2019-Jerabek-Martin-Jerabek-thesis-2019-canfd.pdf, accessed: 2020-05-17.
+\bibitem{ctu-project} pcie-ctu\_can\_fd, https://gitlab.fel.cvut.cz/canbus/pcie-ctu\_can\_fd, accessed: 2020-05-17.
+\bibitem{progdum} Czech Technical University in Prague, Faculty of Electrical Engineering, Department of Measurement, CTU CAN FD IP CORE Datasheet, http://canbus.pages.fel.cvut.cz/ctucanfd\_ip\_core/Progdokum.pdf, accessed: 2020-05-19
 \bibitem{ECUs} CSS Electronics, CAN BUS EXPLAINED - A SIMPLE INTRO (2020), https://www.csselectronics.com/screen/page/simple-intro-to-can-bus/language/en, accessed: 2020-05-16.
-\bibitem{can_frame} https://upload.wikimedia.org/wikipedia/commons/5/5e/CAN-Bus-frame\_in\_base\_format\_without\_stuffbits.svg
+\bibitem{can_frame} Complete CAN Frame, https://upload.wikimedia.org/wikipedia/commons/5/5e/CAN-Bus-frame\_in\_base\_format\_without\_stuffbits.svg, accessed: 2020-01-16.
 \bibitem{can_Vd} Texas Instruments, Automotive Controller Area Network (CAN) Overview and Training, https://www.youtube.com/watch?v=YrJn2AyWVBc - time 4:40, accessed: 2020-05-16.
 \bibitem{can_crc} Vector E-Learning, Introduction to CAN (EN), https://elearning.vector.com/mod/page/view.php?id=370, accessed: 2020-05-16.
 \bibitem{priority_can} CSS Electronics, CAN FD EXPLAINED - A SIMPLE INTRO (2020), https://www.csselectronics.com/screen/page/can-fd-flexible-data-rate-intro, accessed: 2020-05-17.
@@ -336,17 +343,20 @@ This parameter ensures that the console is connected through ttyS0 serial port. 
 \bibitem{canfd_dlc} Oliver Hartkopp, The CAN Subsystem of the Linux Kernel, https://wiki.automotivelinux.org/\_media/agl-distro/agl2017-socketcan-print.pdf by Oliver Hartkopp - page 50, accessed: 2020-04-01.
 \bibitem{qemu_development} RTEMS, QEMU with CAN Emulation, https://devel.rtems.org/wiki/Developer/Simulators/QEMU/CANEmulation, accessed: 2020-05-18.
 \bibitem{qemu_qom} QEMU, Features/QOM, https://wiki.qemu.org/Features/QOM, accessed: 2020-05-18.
-\bibitem{qemu} https://help.ubuntu.com/lts/serverguide/qemu.html
-\bibitem{vmware} https://www.vmware.com/products/workstation-player/workstation-player-evaluation.html
-\bibitem{ubuntu} https://ubuntu.com/download/desktop
-\bibitem{sja1000-fdtol} https://gitlab.fel.cvut.cz/canbus/zynq/sja1000-fdtol
-\bibitem{qemu-canbusexplain} https://www.linuxdays.cz/2017/video/Pavel\_Pisa-CAN\_canopen.pdf
-\bibitem{qemu-style} https://github.com/portante/qemu/blob/master/CODING\_STYLE
-\bibitem{driver-repo} https://gitlab.fel.cvut.cz/canbus/ctucanfd\_ip\_core/-/tree/master/driver
-\bibitem{linux-style} https://www.kernel.org/doc/html/v4.10/process/coding-style.html
-\bibitem{mc} https://midnight-commander.org/
-\bibitem{rdwrmem} http://cmp.felk.cvut.cz/~pisa/linux/rdwrmem.c
-\bibitem{can-utils} https://github.com/linux-can/can-utils/
+\bibitem{qemu} QEMU, What is QEMU, https://www.qemu.org/, accessed: 2020-01-18.
+\bibitem{vmware} VMware, Workstation 15, Playerhttps://www.vmware.com/products/workstation-player/workstation-player-evaluation.html, accessed: 2020-01-18.
+\bibitem{ubuntu} Ununtu, Download Ubuntu Desktop, https://ubuntu.com/download/desktop, accessed: 2020-01-18.
+\bibitem{sja1000-fdtol} sja1000-fdtol, https://gitlab.fel.cvut.cz/canbus/zynq/sja1000-fdtol, accessed: 2020-05-20.
+\bibitem{qemu-canbusexplain} Pavel Pisa, GNU/Linux, CAN and CANopen in Real-time Control Applications, https://www.linuxdays.cz/2017/video/Pavel\_Pisa-CAN\_canopen.pdf, accessed: 2020-01-20.
+\bibitem{qemu-style} qemu/CODING\_STYLE, https://github.com/portante/qemu/blob/master/CODING\_STYLE, accessed: 2020-01-20.
+\bibitem{driver-repo} ctucanfd\_ip\_core driver, https://gitlab.fel.cvut.cz/canbus/ctucanfd\_ip\_core/-/tree/master/driver, accessed: 2020-05-17.
+\bibitem{linux-style} The Linux Kernel, Linux kernel coding style, https://www.kernel.org/doc/html/v4.10/process/coding-style.html, accessed: 2020-05-17.
+\bibitem{mc} MC, Welcome to the Midnight Commander Development Center, https://midnight-commander.org/, accessed: 2020-01-17.
+\bibitem{rdwrmem} Pavel Pisa, Simple program to dump and write physical or device provided
+  memory locations from Linux userspace, http://cmp.felk.cvut.cz/~pisa/linux/rdwrmem.c, accessed: 2020-01-17.
+\bibitem{can-utils} linux-can/can-utils, Linux-CAN / SocketCAN user space applications, https://github.com/linux-can/can-utils/, accessed: 2020-01-17.
+\bibitem{thesis-repo} charvj/ctucanfd-thesis https://github.com/charvj/ctucanfd-thesis/tree/master, accessed: 2020-05-22.
+\bibitem{project-doc} ctucanfd\_emulation, https://gitlab.fel.cvut.cz/canbus/qemu-canbus/-/wikis/ctucanfd\_emulation
 \end{thebibliography}
  
 \appendix
@@ -362,6 +372,7 @@ This parameter ensures that the console is connected through ttyS0 serial port. 
   \begin{verbatim}   git remote add gitlab-fel https://gitlab.fel.cvut.cz/canbus/qemu-canbus.git
    git fetch --all
    git checkout -b charvj10-canfd gitlab-fel/charvj10-canfd\end{verbatim}
+   For more information, see the project's documentation page \cite{project-doc}.
 
 \chapter{Useful commands}
   It is useful to know debugging tools and other utilities available in the system to proceed with the work. It could make progress faster and simpler. The shortlist of advice tools means  which were used during this project development follows.
